@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted, watchEffect, computed } from 'vue'
+import { ref, watchEffect, computed } from 'vue'
 import * as d3 from 'd3';
-import { d3adaptor } from '../WebCola/src/d3adaptor';
 import { Node, Link, Layout } from '../WebCola/src/layout';
 import { GridRouter } from '../WebCola/src/gridrouter';
-import { gridify, powerGraphGridLayout } from '../WebCola/src/batch';
+// import { gridify, powerGraphGridLayout } from '../WebCola/src/batch';
 
 const diagram = ref<HTMLDivElement | null>(null);
 
@@ -15,7 +14,8 @@ const color = (d: NamedNode) => {
     event: "white",
     compound: "rgb(0, 104, 199)",
   }[d.type] || "#000";
-}
+};
+
 // const color = d3.scaleOrdinal(d3.schemeCategory10);
 
 // const cola = d3adaptor(d3).size([width, height]);
@@ -262,22 +262,48 @@ const color = (d: NamedNode) => {
 //   label.call(dragListener);
 // };
 
+type ReactomeItem = {
+  stId: string;
+  type: "compound" | "event" | "pathway";
+  name: string[];
+  displayName: string;
+  state: "hide" | "split" | "show";
+};
+
 const interest = ref(localStorage.getItem("interest") || "");
-const pathways = ref(localStorage.getItem("pathways") || "R-HSA-71403.2");
-const hidden = ref(localStorage.getItem("hidden") || "");
+
+let initialPathways: ReactomeItem[];
+try {
+  initialPathways = JSON.parse(localStorage.getItem("pathways") || "[]");
+} catch {
+  initialPathways = [];
+}
+const pathways = ref<ReactomeItem[]>(initialPathways);
+
+let initialHidden: ReactomeItem[];
+try {
+  initialHidden = JSON.parse(localStorage.getItem("hidden") || "[]");
+} catch {
+  initialHidden = [];
+}
+const hidden = ref<ReactomeItem[]>(initialHidden);
+
 const fontSize = ref(+(localStorage.getItem("fontSize") || 8));
 const nodeSize = ref(+(localStorage.getItem("nodeSize") || 70));
 const padding = ref(+(localStorage.getItem("padding") || 35));
 const rounded = ref(+(localStorage.getItem("rounded") || 0));
+const pathwayIdInput = ref("");
+
+const showLabel = ref<{[id: string]: boolean}>({});
 
 watchEffect(() => {
   localStorage.setItem("interest", interest.value);
 });
 watchEffect(() => {
-  localStorage.setItem("pathways", pathways.value);
+  localStorage.setItem("pathways", JSON.stringify(pathways.value));
 });
 watchEffect(() => {
-  localStorage.setItem("hidden", hidden.value);
+  localStorage.setItem("hidden", JSON.stringify(hidden.value));
 });
 watchEffect(() => {
   localStorage.setItem("fontSize", `${fontSize.value}`);
@@ -295,23 +321,22 @@ watchEffect(() => {
 const interestList = computed(() => {
   return interest.value.split(/[\n,]/).map(d => d.trim());
 });
-const pathwayList = computed(() => {
-  return pathways.value.split(/[\n,]/).map(d => d.trim());
-});
-const hiddenList = computed(() => {
-  return hidden.value.split(/[\n,]/).map(d => +d.trim());
-});
 
 const pathwayObjects = computed(async () => {
-  return await Promise.all(pathwayList.value.filter((pathwayId) => pathwayId).map(async (pathwayId) => {
-    const pathwayResponse = await fetch(`https://reactome.org/ContentService/data/query/${pathwayId}`);
+  return await Promise.all(pathways.value.filter((pathway) => pathway.state === "show").map(async (pathway) => {
+    if (pathway.displayName === pathway.stId) {
+      const pathwayData = await (await fetch(`https://reactome.org/ContentService/data/query/${pathway.stId}`)).json();
+      pathway.displayName = pathwayData.displayName;
+      pathway.name = pathway.name;
+    }
+    const pathwayResponse = await fetch(`https://reactome.org/ContentService/data/pathway/${pathway.stId}/containedEvents`);
     return await pathwayResponse.json();
   }));
 })
 
 const eventObjects = computed(async () => {
   const eventLists = await Promise.all((await pathwayObjects.value).map(async (pathway) => {
-    const eventIds = pathway.hasEvent.map((d: any) => d.dbId);
+    const eventIds = pathway.map((d: any) => d.stId);
     const eventsResponse = await fetch('https://reactome.org/ContentService/data/query/ids', {
       method: 'POST',
       body: eventIds.join(','),
@@ -322,13 +347,14 @@ const eventObjects = computed(async () => {
 });
 
 interface NamedNode extends Node {
-  name: string;
-  type: string;
-  dbId: number;
+  name: string[];
+  type: "event" | "compound";
+  stId: string;
+  displayName: string;
 };
 
 const graph = computed<Promise<{nodes: NamedNode[], links: Link<NamedNode>[]}>>(async () => {
-  hidden.value;
+  hidden.value.map((d) => d.state);
   nodeSize.value;
   padding.value;
 
@@ -345,10 +371,10 @@ const graph = computed<Promise<{nodes: NamedNode[], links: Link<NamedNode>[]}>>(
 
   events.forEach((event: any) => {
     if (!nodeMap[event.displayName]) {
-      if (hiddenList.value.includes(event.dbId)) {
+      if (hidden.value.find((d) => d.stId === event.stId)?.state === "hide") {
         return;
       }
-      nodes.push({ name: event.displayName, dbId: event.dbId, type: "event", ...initialPosition });
+      nodes.push({ name: event.name, displayName: event.displayName, stId: event.stId, type: "event", ...initialPosition });
       nodeMap[event.displayName] = nodes[nodes.length - 1];
     }
     const eventNode = nodeMap[event.displayName];
@@ -360,11 +386,11 @@ const graph = computed<Promise<{nodes: NamedNode[], links: Link<NamedNode>[]}>>(
       if (!(typeof compound === 'object' && compound !== null)) {
         return;
       }
-      if (hiddenList.value.includes(compound.dbId)) {
+      if (hidden.value.find((d) => d.stId === compound.stId)?.state === "hide") {
         return;
       }
-      if (!nodeMap[compound.displayName]) {
-        nodes.push({ name: compound.displayName, dbId: compound.dbId, type: "compound", ...initialPosition });
+      if (!nodeMap[compound.displayName] || hidden.value.find((d) => d.stId === compound.stId)?.state === "split") {
+        nodes.push({ name: compound.name, displayName: compound.displayName, stId: compound.stId, type: "compound", ...initialPosition });
         nodeMap[compound.displayName] = nodes[nodes.length - 1];
       }
       links.push({ source: nodeMap[compound.displayName], target: eventNode });
@@ -374,11 +400,11 @@ const graph = computed<Promise<{nodes: NamedNode[], links: Link<NamedNode>[]}>>(
       if (!(typeof compound === 'object' && compound !== null)) {
         return;
       }
-      if (hiddenList.value.includes(compound.dbId)) {
+      if (hidden.value.find((d) => d.stId === compound.stId)?.state === "hide") {
         return;
       }
-      if (!nodeMap[compound.displayName]) {
-        nodes.push({ name: compound.displayName, dbId: compound.dbId, type: "compound", ...initialPosition });
+      if (!nodeMap[compound.displayName] || hidden.value.find((d) => d.stId === compound.stId)?.state === "split") {
+        nodes.push({ name: compound.name, displayName: compound.displayName, stId: compound.stId, type: "compound", ...initialPosition });
         nodeMap[compound.displayName] = nodes[nodes.length - 1];
       }
       links.push({ source: eventNode, target: nodeMap[compound.displayName] });
@@ -386,6 +412,8 @@ const graph = computed<Promise<{nodes: NamedNode[], links: Link<NamedNode>[]}>>(
   });
   return {nodes, links};
 });
+
+let tspan: d3.Selection<SVGTSpanElement, NamedNode, SVGSVGElement, unknown>;
 
 watchEffect(async () => {
   fontSize.value;
@@ -414,7 +442,13 @@ watchEffect(async () => {
 
   window.onkeydown = ({ code }) => {
     if (code === 'Space' && hovered) {
-      hidden.value += `, ${hovered.dbId}`;
+      hidden.value.push({
+        stId: hovered.stId,
+        type: hovered.type,
+        name: hovered.name,
+        displayName: hovered.displayName,
+        state: "hide",
+      });
     }
   };
 
@@ -432,7 +466,7 @@ watchEffect(async () => {
     .on("mouseover.hide", (d) => hovered = d)
 
   node.append("title")
-    .text((d) => d.name);
+    .text((d) => d.displayName);
 
   const lines = Math.max(1, Math.floor(nodeSize.value / fontSize.value) - 1);
 
@@ -446,17 +480,11 @@ watchEffect(async () => {
     .style("stroke", lines > 1 ? "black" : "white")
     .style("stroke-width", 3)
     .style("fill", lines > 1 ? "white" : "black")
-    .style("paint-order", "stroke")
-    .each(function (d) {
-      // d3.select(this).selectAll(".tspan").data(d.type === "event" ? [] : d.name.split(" ").map(dd => ({parent: d, text: dd})).slice(0, lines))
-      d3.select(this).selectAll(".tspan").data(d.type === "event" ? [] : [{parent: d, text: d.name.split(" ")[0]}])
-        .enter().append("tspan")
-        .attr("class", "tspan")
-        .attr("dy", fontSize.value)
-        .attr("dy", 0)
-        .on("mouseover.hide", (d) => hovered = d.parent)
-        .text((d: any) => d.text);
-    });
+    .style("paint-order", "stroke");
+
+  tspan = label.append("tspan").text((d) => (d.type === "compound" || showLabel.value[d.stId]) ? d.name[0] : "");
+
+  label.append("title").text((d) => d.displayName);
 
   const updateGridify = () => {
     layout.start(0, 0, 0, 10, false);
@@ -500,11 +528,6 @@ watchEffect(async () => {
         .attr('fill', 'none')
     });
 
-    // svg.selectAll(".node")
-    //   .attr("x", (d: any) => d.bounds.x + margin)
-    //   .attr("y", (d: any) => d.bounds.y + margin)
-    //   .attr("width", (d: any) => d.bounds.width() - 2 * margin)
-    //   .attr("height", (d: any) => d.bounds.height() - 2 * margin);
     svg.selectAll(".node")
       .attr("x", (d: any) => d.bounds.x)
       .attr("y", (d: any) => d.bounds.y)
@@ -513,7 +536,7 @@ watchEffect(async () => {
 
     svg.selectAll(".label")
       .attr("x", (d: any) => d.bounds.x + d.bounds.width()/2)
-      .attr("y", (d: any) => lines > 1 ? d.bounds.y + d.bounds.height()/2 : d.bounds.y - fontSize.value)
+      .attr("y", (d: any) => lines > 1 ? d.bounds.y + d.bounds.height()/2 : d.bounds.y - fontSize.value / 2)
     svg.selectAll(".tspan")
       .attr("x", (d: any) => d.parent.bounds.x + d.parent.bounds.width()/2)
   };
@@ -526,15 +549,9 @@ watchEffect(async () => {
     let e =  typeof TouchEvent !== 'undefined' && ev.sourceEvent instanceof TouchEvent ? (ev.sourceEvent).changedTouches[0] : ev.sourceEvent;
     return { x: e.clientX, y: e.clientY };
   }
+  let didDrag = false;
   function dragStart(d: any) {
-    console.log(d);
-    ghosts = [1, 2].map((i) => svg.append('rect')
-      .attr('class', 'ghost')
-      .attr('x', d.bounds.x)
-      .attr('y', d.bounds.y)
-      .attr('width', d.bounds.width())
-      .attr('height', d.bounds.height())
-    );
+    didDrag = false;
     eventStart[d.index] = getEventPos();
   }
   function getDragPos(d: any) {
@@ -543,17 +560,31 @@ watchEffect(async () => {
     return { x: d.bounds.x + p.x - startPos.x, y: d.bounds.y + p.y - startPos.y };
   }
   function drag(d: any) {
+    if (!didDrag) {
+      ghosts = [1, 2].map((i) => svg.append('rect')
+        .attr('class', 'ghost')
+        .attr('x', d.bounds.x)
+        .attr('y', d.bounds.y)
+        .attr('width', d.bounds.width())
+        .attr('height', d.bounds.height())
+      );
+      didDrag = true;
+    }
     const p = getDragPos(d);
     ghosts[1]
       .attr('x', p.x)
       .attr('y', p.y)
   }
   function dragEnd(d: any) {
+    if (!didDrag) {
+      showLabel.value[d.stId] = !showLabel.value[d.stId];
+      return;
+    }
+    ghosts.forEach((g: any) => g.remove());
     let dropPos = getDragPos(d);
     delete eventStart[d.index];
     d.x = dropPos.x;
     d.y = dropPos.y;
-    ghosts.forEach((g: any) => g.remove());
     if (Object.keys(eventStart).length === 0) {
       updateGridify();
     }
@@ -567,6 +598,35 @@ watchEffect(async () => {
   // @ts-ignore
   label.call(dragListener);
 });
+
+watchEffect(() => {
+  Object.entries(showLabel.value);
+  if (tspan) {
+    tspan.text((d) => {
+      // console.log(showLabel.value[d.stId], d.name[0], d.type === "compound" || !!showLabel.value[d.stId]);
+      return (d.type === "compound" || !!showLabel.value[d.stId]) ? d.name[0] : "";
+    });
+  }
+});
+
+const updateState = (item: ReactomeItem) => {
+  if (item.type === "compound") {
+    item.state = item.state === 'hide' ? 'show' : (item.state === 'show' ? 'split' : 'hide');
+    return;
+  }
+  item.state = item.state === 'hide' ? 'show' : 'hide';
+};
+
+const addPathway = () => {
+  pathways.value.push({
+    name: [pathwayIdInput.value],
+    displayName: pathwayIdInput.value,
+    type: "pathway",
+    state: "show",
+    stId: pathwayIdInput.value,
+  });
+  pathwayIdInput.value = '';
+};
 
 </script>
 
@@ -596,19 +656,32 @@ watchEffect(async () => {
     <div class="drawer-side">
       <label for="app-drawer" class="drawer-overlay"></label>
       <aside class="bg-base-200 w-120 p-2">
-        <h5>Metabolites of interest</h5>
+        <h5 class="font-semibold mt-2">Metabolites of interest</h5>
         <textarea class="textarea textarea-bordered" rows="6" v-model="interest"></textarea>
-        <h5>Pathways</h5>
-        <textarea class="textarea textarea-bordered" rows="6" v-model="pathways"></textarea>
-        <h5>Hidden</h5>
-        <textarea class="textarea textarea-bordered" rows="6" v-model="hidden"></textarea>
-        <h5>Font Size ({{ fontSize }})</h5>
+        <h5 class="font-semibold mt-2">Pathways</h5>
+        <div v-for="item, index in pathways" :key="item.stId" class="flex mb-1">
+          <button class="btn btn-sm btn-circle btn-ghost" @click="pathways.splice(index, 1)"><span class="material-symbols-outlined">close</span></button>
+          <button class="btn btn-sm btn-ghost gap-2 normal-case" @click="updateState(item)">
+            <span class="material-symbols-outlined">{{ {hide: "visibility_off", show: "visibility", split: "call_split"}[item.state] }}</span>
+            {{ `${item.displayName.substring(0, 15)}${item.displayName.length > 15 ? '...' : ''}` }}
+          </button>
+        </div>
+        <input class="input input-sm input-bordered" placeholder="ID e.g. R-HSA-70171" v-model="pathwayIdInput"/><button class="btn btn-sm ml-1" @click="addPathway()">Add</button>
+        <div class="font-semibold mt-2">Hide / Show / Split</div>
+        <div v-for="item, index in hidden" :key="item.stId" class="flex mb-1">
+          <button class="btn btn-sm btn-circle btn-ghost" @click="hidden.splice(index, 1)"><span class="material-symbols-outlined">close</span></button>
+          <button class="btn btn-sm btn-ghost gap-2 normal-case" @click="updateState(item)">
+            <span class="material-symbols-outlined">{{ {hide: "visibility_off", show: "visibility", split: "call_split"}[item.state] }}</span>
+            {{ `${item.displayName.substring(0, 15)}${item.displayName.length > 15 ? '...' : ''}` }}
+          </button>
+        </div>
+        <h5 class="font-semibold mt-2">Font Size ({{ fontSize }})</h5>
         <input type="range" min="2" max="20" class="range" v-model.number="fontSize" />
-        <h5>Node Size ({{ nodeSize }})</h5>
+        <h5 class="font-semibold mt-2">Node Size ({{ nodeSize }})</h5>
         <input type="range" min="10" max="100" class="range" v-model.number="nodeSize" />
-        <h5>Padding ({{ padding }})</h5>
+        <h5 class="font-semibold mt-2">Padding ({{ padding }})</h5>
         <input type="range" min="10" max="100" class="range" v-model.number="padding" />
-        <h5>Rounded ({{ rounded }})</h5>
+        <h5 class="font-semibold mt-2">Rounded ({{ rounded }})</h5>
         <input type="range" min="0" max="1" step="0.01" class="range" v-model.number="rounded" />
       </aside>
     </div>
