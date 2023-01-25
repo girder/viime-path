@@ -1,0 +1,3 @@
+[submodule "src/WebCola"]
+	path = src/WebCola
+	url = git@github.com:jeffbaumes/WebCola.git
