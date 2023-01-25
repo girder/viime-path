@@ -10,7 +10,13 @@ const diagram = ref<HTMLDivElement | null>(null);
 
 const width = 1500;
 const height = 1000;
-const color = d3.scaleOrdinal(d3.schemeCategory10);
+const color = (d: NamedNode) => {
+  return {
+    event: "white",
+    compound: "steelblue",
+  }[d.type] || "#000";
+}
+// const color = d3.scaleOrdinal(d3.schemeCategory10);
 
 // const cola = d3adaptor(d3).size([width, height]);
 
@@ -256,20 +262,12 @@ const color = d3.scaleOrdinal(d3.schemeCategory10);
 //   label.call(dragListener);
 // };
 
-const defaultHidden = [
-  70106, // "H+ [cytosol]"
-  113529, // "H+ [mitochondrial matrix]"
-  29376, // CO2
-  29362, // "NADH [mitochondrial matrix]""
-  113526, // "NAD+ [mitochondrial matrix]"
-  113521, // "H2O [mitochondrial matrix]"
-];
-
 const interest = ref(localStorage.getItem("interest") || "");
 const pathways = ref(localStorage.getItem("pathways") || "R-HSA-71403.2");
-const hidden = ref(localStorage.getItem("hidden") || defaultHidden.join(", "));
+const hidden = ref(localStorage.getItem("hidden") || "");
 const fontSize = ref(+(localStorage.getItem("fontSize") || 8));
 const nodeSize = ref(+(localStorage.getItem("nodeSize") || 70));
+const padding = ref(+(localStorage.getItem("padding") || 35));
 const rounded = ref(+(localStorage.getItem("rounded") || 0));
 
 watchEffect(() => {
@@ -289,6 +287,9 @@ watchEffect(() => {
 });
 watchEffect(() => {
   localStorage.setItem("rounded", `${rounded.value}`);
+});
+watchEffect(() => {
+  localStorage.setItem("padding", `${padding.value}`);
 });
 
 const interestList = computed(() => {
@@ -329,6 +330,7 @@ interface NamedNode extends Node {
 const graph = computed<Promise<{nodes: NamedNode[], links: Link<NamedNode>[]}>>(async () => {
   hidden.value;
   nodeSize.value;
+  padding.value;
 
   const events = (await eventObjects.value).filter((event) => event.className === "Reaction");
   const nodes: NamedNode[] = [];
@@ -350,28 +352,37 @@ const graph = computed<Promise<{nodes: NamedNode[], links: Link<NamedNode>[]}>>(
       nodeMap[event.displayName] = nodes[nodes.length - 1];
     }
     const eventNode = nodeMap[event.displayName];
-    if (eventNode) {
-      event.input.forEach((compound: any) => {
-        if (hiddenList.value.includes(compound.dbId)) {
-          return;
-        }
-        if (!nodeMap[compound.displayName]) {
-          nodes.push({ name: compound.displayName, dbId: compound.dbId, type: "compound", ...initialPosition });
-          nodeMap[compound.displayName] = nodes[nodes.length - 1];
-        }
-        links.push({ source: nodeMap[compound.displayName], target: eventNode });
-      });
-      event.output.forEach((compound: any) => {
-        if (hiddenList.value.includes(compound.dbId)) {
-          return;
-        }
-        if (!nodeMap[compound.displayName]) {
-          nodes.push({ name: compound.displayName, dbId: compound.dbId, type: "compound", ...initialPosition });
-          nodeMap[compound.displayName] = nodes[nodes.length - 1];
-        }
-        links.push({ source: eventNode, target: nodeMap[compound.displayName] });
-      });
+    if (!eventNode) {
+      return;
     }
+    event.input.forEach((compound: any) => {
+      // Some inputs are just numbers for some reason
+      if (!(typeof compound === 'object' && compound !== null)) {
+        return;
+      }
+      if (hiddenList.value.includes(compound.dbId)) {
+        return;
+      }
+      if (!nodeMap[compound.displayName]) {
+        nodes.push({ name: compound.displayName, dbId: compound.dbId, type: "compound", ...initialPosition });
+        nodeMap[compound.displayName] = nodes[nodes.length - 1];
+      }
+      links.push({ source: nodeMap[compound.displayName], target: eventNode });
+    });
+    event.output.forEach((compound: any) => {
+      // Some inputs are just numbers for some reason
+      if (!(typeof compound === 'object' && compound !== null)) {
+        return;
+      }
+      if (hiddenList.value.includes(compound.dbId)) {
+        return;
+      }
+      if (!nodeMap[compound.displayName]) {
+        nodes.push({ name: compound.displayName, dbId: compound.dbId, type: "compound", ...initialPosition });
+        nodeMap[compound.displayName] = nodes[nodes.length - 1];
+      }
+      links.push({ source: eventNode, target: nodeMap[compound.displayName] });
+    });
   });
   return {nodes, links};
 });
@@ -391,14 +402,13 @@ watchEffect(async () => {
     .nodes(nodes)
     .links(links)
     // .groupCompactness(1e-4)
-    .linkDistance(nodeSize.value * 1.5)
+    .linkDistance(nodeSize.value + padding.value)
+    // .linkDistance(nodeSize.value * 1.5)
     // .symmetricDiffLinkLengths(5)
     .start(1000, 0, 100, 100, false);
 
   const nudge = 4;
   const margin = 5;
-
-  console.log(layout);
 
   let hovered: NamedNode | null = null;
 
@@ -416,8 +426,9 @@ watchEffect(async () => {
     .attr("class", "node")
     .attr("rx", nodeSize.value * rounded.value / 2)
     .attr("ry", nodeSize.value * rounded.value / 2)
-    .style("fill", "transparent")
-    .style("fill", (d) => color(d.type))
+    .style("fill", (d) => color(d))
+    .style("stroke", "black")
+    .style("stroke-width", 1)
     .on("mouseover.hide", (d) => hovered = d)
 
   node.append("title")
@@ -431,15 +442,18 @@ watchEffect(async () => {
     .attr("class", "label")
     .style("font-size", fontSize.value)
     .style("text-anchor", "middle")
+    .style("dominant-baseline", "middle")
     .style("stroke", "white")
     .style("stroke-width", 3)
     .style("fill", "black")
     .style("paint-order", "stroke")
     .each(function (d) {
-      d3.select(this).selectAll(".tspan").data(d.name.split(" ").map(dd => ({parent: d, text: dd})).slice(0, lines))
+      // d3.select(this).selectAll(".tspan").data(d.type === "event" ? [] : d.name.split(" ").map(dd => ({parent: d, text: dd})).slice(0, lines))
+      d3.select(this).selectAll(".tspan").data(d.type === "event" ? [] : [{parent: d, text: d.name.split(" ")[0]}])
         .enter().append("tspan")
         .attr("class", "tspan")
         .attr("dy", fontSize.value)
+        .attr("dy", 0)
         .on("mouseover.hide", (d) => hovered = d.parent)
         .text((d: any) => d.text);
     });
@@ -499,7 +513,7 @@ watchEffect(async () => {
 
     svg.selectAll(".label")
       .attr("x", (d: any) => d.bounds.x + d.bounds.width()/2)
-      .attr("y", (d: any) => lines > 1 ? d.bounds.y : d.bounds.y - 1.5 * fontSize.value)
+      .attr("y", (d: any) => lines > 1 ? d.bounds.y + d.bounds.height()/2 : d.bounds.y - fontSize.value)
     svg.selectAll(".tspan")
       .attr("x", (d: any) => d.parent.bounds.x + d.parent.bounds.width()/2)
   };
@@ -589,11 +603,13 @@ watchEffect(async () => {
         <h5>Hidden</h5>
         <textarea class="textarea textarea-bordered" rows="6" v-model="hidden"></textarea>
         <h5>Font Size ({{ fontSize }})</h5>
-        <input type="range" min="2" max="20" class="range" v-model="fontSize" />
+        <input type="range" min="2" max="20" class="range" v-model.number="fontSize" />
         <h5>Node Size ({{ nodeSize }})</h5>
-        <input type="range" min="10" max="100" class="range" v-model="nodeSize" />
+        <input type="range" min="10" max="100" class="range" v-model.number="nodeSize" />
+        <h5>Padding ({{ padding }})</h5>
+        <input type="range" min="10" max="100" class="range" v-model.number="padding" />
         <h5>Rounded ({{ rounded }})</h5>
-        <input type="range" min="0" max="1" step="0.01" class="range" v-model="rounded" />
+        <input type="range" min="0" max="1" step="0.01" class="range" v-model.number="rounded" />
       </aside>
     </div>
   </div>
