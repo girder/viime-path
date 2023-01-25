@@ -13,7 +13,7 @@ const height = 1000;
 const color = (d: NamedNode) => {
   return {
     event: "white",
-    compound: "steelblue",
+    compound: "rgb(0, 104, 199)",
   }[d.type] || "#000";
 }
 // const color = d3.scaleOrdinal(d3.schemeCategory10);
@@ -443,9 +443,9 @@ watchEffect(async () => {
     .style("font-size", fontSize.value)
     .style("text-anchor", "middle")
     .style("dominant-baseline", "middle")
-    .style("stroke", "white")
+    .style("stroke", lines > 1 ? "black" : "white")
     .style("stroke-width", 3)
-    .style("fill", "black")
+    .style("fill", lines > 1 ? "white" : "black")
     .style("paint-order", "stroke")
     .each(function (d) {
       // d3.select(this).selectAll(".tspan").data(d.type === "event" ? [] : d.name.split(" ").map(dd => ({parent: d, text: dd})).slice(0, lines))
