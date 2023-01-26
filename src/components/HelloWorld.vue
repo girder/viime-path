@@ -6,6 +6,7 @@ import { GridRouter } from '../WebCola/src/gridrouter';
 // import { gridify, powerGraphGridLayout } from '../WebCola/src/batch';
 
 const diagram = ref<HTMLDivElement | null>(null);
+const canvas = ref<HTMLCanvasElement | null>(null);
 
 const width = 1500;
 const height = 1000;
@@ -413,7 +414,8 @@ const graph = computed<Promise<{nodes: NamedNode[], links: Link<NamedNode>[]}>>(
   return {nodes, links};
 });
 
-let tspan: d3.Selection<SVGTSpanElement, NamedNode, SVGSVGElement, unknown>;
+let tspan: d3.Selection<SVGTSpanElement, NamedNode, SVGGElement, unknown>;
+let transform = d3.zoomIdentity;
 
 watchEffect(async () => {
   fontSize.value;
@@ -422,6 +424,7 @@ watchEffect(async () => {
   const {nodes, links} = await graph.value;
   diagram.value?.replaceChildren();
   const svg = d3.select(diagram.value).append('svg').attr('width', width).attr('height', height);
+  const g = svg.append("g").attr("transform", transform as any);
 
   const layout = new Layout()
     .convergenceThreshold(1e-3)
@@ -433,7 +436,8 @@ watchEffect(async () => {
     .linkDistance(nodeSize.value + padding.value)
     // .linkDistance(nodeSize.value * 1.5)
     // .symmetricDiffLinkLengths(5)
-    .start(1000, 0, 100, 100, false);
+    // .start(1000, 0, 100, 100, false);
+    .start(100, 0, 10, 10, false);
 
   const nudge = 4;
   const margin = 5;
@@ -452,9 +456,9 @@ watchEffect(async () => {
     }
   };
 
-  const linksGroup = svg.append("g");
+  const linksGroup = g.append("g");
 
-  const node = svg.selectAll(".node")
+  const node = g.selectAll(".node")
     .data(nodes)
     .enter().append("rect")
     .attr("class", "node")
@@ -470,16 +474,16 @@ watchEffect(async () => {
 
   const lines = Math.max(1, Math.floor(nodeSize.value / fontSize.value) - 1);
 
-  const label = svg.selectAll(".label")
+  const label = g.selectAll(".label")
     .data(nodes)
     .enter().append("text")
     .attr("class", "label")
     .style("font-size", fontSize.value)
     .style("text-anchor", "middle")
     .style("dominant-baseline", "middle")
-    .style("stroke", lines > 1 ? "black" : "white")
-    .style("stroke-width", 3)
-    .style("fill", lines > 1 ? "white" : "black")
+    .style("stroke", (d) => (d.type === "compound" && lines > 1) ? "black" : "white")
+    .style("stroke-width", 2)
+    .style("fill", (d) => (d.type === "compound" && lines > 1) ? "white" : "black")
     .style("paint-order", "stroke");
 
   tspan = label.append("tspan").text((d) => (d.type === "compound" || showLabel.value[d.stId]) ? d.name[0] : "");
@@ -487,7 +491,7 @@ watchEffect(async () => {
   label.append("title").text((d) => d.displayName);
 
   const updateGridify = () => {
-    layout.start(0, 0, 0, 10, false);
+    layout.start(0, 0, 0, 10, false, false);
     nodes.forEach((node: any) => {
       node.bounds.x += margin;
       node.bounds.y += margin;
@@ -528,16 +532,16 @@ watchEffect(async () => {
         .attr('fill', 'none')
     });
 
-    svg.selectAll(".node")
+    g.selectAll(".node")
       .attr("x", (d: any) => d.bounds.x)
       .attr("y", (d: any) => d.bounds.y)
       .attr("width", (d: any) => d.bounds.width())
       .attr("height", (d: any) => d.bounds.height());
 
-    svg.selectAll(".label")
+    g.selectAll(".label")
       .attr("x", (d: any) => d.bounds.x + d.bounds.width()/2)
       .attr("y", (d: any) => lines > 1 ? d.bounds.y + d.bounds.height()/2 : d.bounds.y - fontSize.value / 2)
-    svg.selectAll(".tspan")
+    g.selectAll(".tspan")
       .attr("x", (d: any) => d.parent.bounds.x + d.parent.bounds.width()/2)
   };
   updateGridify();
@@ -547,7 +551,10 @@ watchEffect(async () => {
   function getEventPos() {
     let ev = <any>d3.event;
     let e =  typeof TouchEvent !== 'undefined' && ev.sourceEvent instanceof TouchEvent ? (ev.sourceEvent).changedTouches[0] : ev.sourceEvent;
-    return { x: e.clientX, y: e.clientY };
+    // return { x: e.clientX, y: e.clientY };
+    const transform = d3.zoomTransform(g.node()!);
+    const [x, y] = transform.invert([e.clientX, e.clientY]);
+    return {x, y};
   }
   let didDrag = false;
   function dragStart(d: any) {
@@ -561,7 +568,7 @@ watchEffect(async () => {
   }
   function drag(d: any) {
     if (!didDrag) {
-      ghosts = [1, 2].map((i) => svg.append('rect')
+      ghosts = [1, 2].map((i) => g.append('rect')
         .attr('class', 'ghost')
         .attr('x', d.bounds.x)
         .attr('y', d.bounds.y)
@@ -597,6 +604,18 @@ watchEffect(async () => {
   node.call(dragListener);
   // @ts-ignore
   label.call(dragListener);
+
+  const zoom = d3.zoom()
+      .extent([[0, 0], [width, height]])
+      .scaleExtent([0.1, 10.0])
+      .on("zoom", zoomed);
+
+  svg.call(zoom as any)
+    .call(zoom.transform as any, transform);
+  function zoomed() {
+    transform = d3.event.transform;
+    g.attr("transform", transform as any);
+  }
 });
 
 watchEffect(() => {
@@ -626,6 +645,57 @@ const addPathway = () => {
     stId: pathwayIdInput.value,
   });
   pathwayIdInput.value = '';
+};
+
+const triggerDownload = (imgURI: string) => {
+  var evt = new MouseEvent('click', {
+    view: window,
+    bubbles: false,
+    cancelable: true
+  });
+
+  var a = document.createElement('a');
+  a.setAttribute('download', 'image.png');
+  a.setAttribute('href', imgURI);
+  a.setAttribute('target', '_blank');
+
+  a.dispatchEvent(evt);
+}
+
+const downloadSVG = () => {
+  const svg = d3.select(diagram.value).select("svg").node() as any;
+  const base64doc = btoa(unescape(encodeURIComponent(svg.outerHTML)));
+  const a = document.createElement('a');
+  const e = new MouseEvent('click');
+  a.download = 'download.svg';
+  a.href = 'data:image/svg+xml;base64,' + base64doc;
+  a.dispatchEvent(e);
+};
+
+const download = () => {
+  const svg = d3.select(diagram.value).select("svg").node() as any;
+  canvas.value?.setAttribute("width", `${width}`);
+  canvas.value?.setAttribute("height", `${height}`);
+  var ctx = canvas.value!.getContext('2d')!;
+  var data = (new XMLSerializer()).serializeToString(svg);
+  var DOMURL = window.URL || window.webkitURL || window;
+
+  var img = new Image();
+  var svgBlob = new Blob([data], {type: 'image/svg+xml;charset=utf-8'});
+  var url = DOMURL.createObjectURL(svgBlob);
+
+  img.onload = function () {
+    ctx.drawImage(img, 0, 0, width, height);
+    DOMURL.revokeObjectURL(url);
+
+    var imgURI = canvas.value!
+      .toDataURL('image/png')
+      .replace('image/png', 'image/octet-stream');
+
+    triggerDownload(imgURI);
+  };
+
+  img.src = url;
 };
 
 </script>
@@ -683,6 +753,10 @@ const addPathway = () => {
         <input type="range" min="10" max="100" class="range" v-model.number="padding" />
         <h5 class="font-semibold mt-2">Rounded ({{ rounded }})</h5>
         <input type="range" min="0" max="1" step="0.01" class="range" v-model.number="rounded" />
+
+        <button class="btn block mb-2" @click="download">Download PNG</button>
+        <button class="btn block" @click="downloadSVG">Download SVG</button>
+        <canvas ref="canvas" class="hidden"></canvas>
       </aside>
     </div>
   </div>
