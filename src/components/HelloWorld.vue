@@ -442,20 +442,6 @@ watchEffect(async () => {
   const nudge = 4;
   const margin = 5;
 
-  let hovered: NamedNode | null = null;
-
-  window.onkeydown = ({ code }) => {
-    if (code === 'Space' && hovered) {
-      hidden.value.push({
-        stId: hovered.stId,
-        type: hovered.type,
-        name: hovered.name,
-        displayName: hovered.displayName,
-        state: "hide",
-      });
-    }
-  };
-
   const linksGroup = g.append("g");
 
   const node = g.selectAll(".node")
@@ -467,7 +453,15 @@ watchEffect(async () => {
     .style("fill", (d) => color(d))
     .style("stroke", "black")
     .style("stroke-width", 1)
-    .on("mouseover.hide", (d) => hovered = d)
+    .on("dblclick", (d) => {
+      hidden.value.push({
+        stId: d.stId,
+        type: d.type,
+        name: d.name,
+        displayName: d.displayName,
+        state: "hide",
+      });
+    });
 
   node.append("title")
     .text((d) => d.displayName);
@@ -611,7 +605,8 @@ watchEffect(async () => {
       .on("zoom", zoomed);
 
   svg.call(zoom as any)
-    .call(zoom.transform as any, transform);
+    .call(zoom.transform as any, transform)
+    .on("dblclick.zoom", null);
   function zoomed() {
     transform = d3.event.transform;
     g.attr("transform", transform as any);
@@ -725,22 +720,25 @@ const download = () => {
     </div>
     <div class="drawer-side">
       <label for="app-drawer" class="drawer-overlay"></label>
-      <aside class="bg-base-200 w-120 p-2">
+      <aside class="bg-base-200 max-w-xs p-2">
         <h5 class="font-semibold mt-2">Metabolites of interest</h5>
-        <textarea class="textarea textarea-bordered" rows="6" v-model="interest"></textarea>
+        <div class="text-sm">Not yet implemented.</div>
+        <textarea class="textarea textarea-bordered" rows="2" v-model="interest"></textarea>
         <h5 class="font-semibold mt-2">Pathways</h5>
+        <div class="text-sm">Select pathway from <a href="https://reactome.org/PathwayBrowser" target="_blank" class="link">reactome</a> and enter the ID found in the reactome bottom panel. Click a list item to toggle visibility.</div>
         <div v-for="item, index in pathways" :key="item.stId" class="flex mb-1">
           <button class="btn btn-sm btn-circle btn-ghost" @click="pathways.splice(index, 1)"><span class="material-symbols-outlined">close</span></button>
-          <button class="btn btn-sm btn-ghost gap-2 normal-case" @click="updateState(item)">
+          <button class="btn btn-sm btn-ghost gap-2 normal-case" @click="updateState(item)" :title="item.displayName">
             <span class="material-symbols-outlined">{{ {hide: "visibility_off", show: "visibility", split: "call_split"}[item.state] }}</span>
             {{ `${item.displayName.substring(0, 15)}${item.displayName.length > 15 ? '...' : ''}` }}
           </button>
         </div>
         <input class="input input-sm input-bordered" placeholder="ID e.g. R-HSA-70171" v-model="pathwayIdInput"/><button class="btn btn-sm ml-1" @click="addPathway()">Add</button>
-        <div class="font-semibold mt-2">Hide / Show / Split</div>
+        <div class="font-semibold mt-2">Hide / Split</div>
+        <div class="text-sm">Click a reaction node in the diagram to toggle label visibility. Double-click any node in the diagram to add to this list. Click a list item to toggle between show/hide/duplicate.</div>
         <div v-for="item, index in hidden" :key="item.stId" class="flex mb-1">
           <button class="btn btn-sm btn-circle btn-ghost" @click="hidden.splice(index, 1)"><span class="material-symbols-outlined">close</span></button>
-          <button class="btn btn-sm btn-ghost gap-2 normal-case" @click="updateState(item)">
+          <button class="btn btn-sm btn-ghost gap-2 normal-case" @click="updateState(item)" :title="item.displayName">
             <span class="material-symbols-outlined">{{ {hide: "visibility_off", show: "visibility", split: "call_split"}[item.state] }}</span>
             {{ `${item.displayName.substring(0, 15)}${item.displayName.length > 15 ? '...' : ''}` }}
           </button>
