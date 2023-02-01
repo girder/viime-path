@@ -17,252 +17,6 @@ const color = (d: NamedNode) => {
   }[d.type] || "#000";
 };
 
-// const color = d3.scaleOrdinal(d3.schemeCategory10);
-
-// const cola = d3adaptor(d3).size([width, height]);
-
-// const forceDirected = () => {
-//   const svg = d3.select(diagram.value).append('svg').attr('width', width).attr('height', height);
-
-//   cola
-//     .nodes(nodes)
-//     .links(links)
-//     .symmetricDiffLinkLengths(15)
-//     .start(300);
-
-//   powerGraphGridLayout({nodes, links}, [width, height], 0);
-
-//   const link = svg.selectAll(".link")
-//     .data(links)
-//     .enter().append("line")
-//     .attr("class", "link")
-//     .style("stroke", "black")
-//     .style("stroke-width", 1);
-
-//   const node = svg.selectAll(".node")
-//     .data(nodes)
-//     .enter().append("rect")
-//     .attr("class", "node")
-//     .attr("width", nodeSize)
-//     .attr("height", nodeSize)
-//     .attr("rx", 5)
-//     .attr("ry", 5)
-//     .style("stroke", "black")
-//     .style("fill", (d) => color(d.type))
-//     .call(cola.drag);
-
-//   node.append("title")
-//     .text((d) => d.name);
-
-//   const label = svg.selectAll(".label")
-//     .data(nodes)
-//     .enter().append("text")
-//     .attr("class", "label")
-//     .text((d) => d.name);
-
-//   cola.on("tick", function () {
-//     link
-//       .attr("x1", (d) => d.source.x)
-//       .attr("y1", (d) => d.source.y)
-//       .attr("x2", (d) => d.target.x)
-//       .attr("y2", (d) => d.target.y);
-
-//     node
-//       .attr("x", (d) => d.x - nodeSize / 2)
-//       .attr("y", (d) => d.y - nodeSize / 2);
-//     label
-//       .attr("x", (d) => d.x)
-//       .attr("y", (d) => d.y);
-//   });
-// }
-
-// const gridifiedGrouped = () => {
-//   const svg = d3.select(diagram.value).append('svg').attr('width', width).attr('height', height);
-
-//   const layout: any = powerGraphGridLayout({nodes, links}, [width, height], 0);
-//   const group = svg.selectAll(".group")
-//     .data(layout.powerGraph.groups)
-//     .enter().append("rect")
-//     .style("fill", "transparent")
-//     .style("stroke", "blue")
-//     .attr("class", "group");
-
-//   console.log(layout.powerGraph.groups);
-//   console.log(layout);
-
-//   const node = svg.selectAll(".node")
-//     .data(nodes)
-//     .enter().append("rect")
-//     .attr("class", "node")
-//     .style("fill", "transparent")
-//     .style("fill", (d) => color(d.type))
-
-//   // const nodeOuter = svg.selectAll(".node-outer")
-//   //   .data(nodes)
-//   //   .enter().append("rect")
-//   //   .attr("class", "node-outer")
-//   //   .style("fill", "transparent")
-//   //   .style("stroke", "red")
-
-//   node.append("title")
-//     .text((d) => d.name);
-
-//   const label = svg.selectAll(".label")
-//     .data(nodes)
-//     .enter().append("text")
-//     .attr("class", "label")
-//     .text((d) => d.name.substring(0, 5));
-
-//   node
-//     .attr("x", (d) => d.x - nodeSize / 2)
-//     .attr("y", (d) => d.y - nodeSize / 2);
-//   label
-//     .attr("x", (d) => d.x)
-//     .attr("y", (d) => d.y);
-
-//   // const nudge = 5;
-//   // const margin = 20;
-//   // const groupMargin = 15;
-//   const nudge = 5;
-//   const margin = 20;
-//   const groupMargin = 10;
-
-//   // layout.powerGraph.groups.forEach((group: any) => {
-//   //   group.routerNode.bounds.x = group.leaves[0].routerNode.bounds.x;
-//   //   group.routerNode.bounds.y = group.leaves[0].routerNode.bounds.y;
-//   //   group.routerNode.bounds.X = group.leaves[0].routerNode.bounds.X;
-//   //   group.routerNode.bounds.Y = group.leaves[0].routerNode.bounds.Y;
-//   //   group.leaves.forEach(({routerNode}: any) => {
-//   //     group.routerNode.bounds.x = Math.min(routerNode.bounds.x, group.routerNode.bounds.x);
-//   //     group.routerNode.bounds.y = Math.min(routerNode.bounds.y, group.routerNode.bounds.y);
-//   //     group.routerNode.bounds.X = Math.max(routerNode.bounds.X, group.routerNode.bounds.X);
-//   //     group.routerNode.bounds.Y = Math.max(routerNode.bounds.Y, group.routerNode.bounds.Y);
-//   //   });
-//   //   group.bounds = group.routerNode.bounds;
-//   // });
-
-//   const updateGridify = () => {
-//     const routes = gridify(layout, nudge, margin, groupMargin);
-
-//     layout.powerGraph.groups.forEach((group: any) => {
-//       group.routerNode.bounds.x = group.leaves[0].routerNode.bounds.x;
-//       group.routerNode.bounds.y = group.leaves[0].routerNode.bounds.y;
-//       group.routerNode.bounds.X = group.leaves[0].routerNode.bounds.X;
-//       group.routerNode.bounds.Y = group.leaves[0].routerNode.bounds.Y;
-//       group.leaves.forEach(({routerNode}: any) => {
-//         group.routerNode.bounds.x = Math.min(routerNode.bounds.x, group.routerNode.bounds.x);
-//         group.routerNode.bounds.y = Math.min(routerNode.bounds.y, group.routerNode.bounds.y);
-//         group.routerNode.bounds.X = Math.max(routerNode.bounds.X, group.routerNode.bounds.X);
-//         group.routerNode.bounds.Y = Math.max(routerNode.bounds.Y, group.routerNode.bounds.Y);
-//       });
-//       group.bounds = group.routerNode.bounds;
-//     });
-
-//     svg.selectAll('path').remove();
-//     routes.forEach(route => {
-//       var cornerradius = 5;
-//       var arrowwidth = 3;
-//       var arrowheight = 7;
-//       var p = GridRouter.getRoutePath(route, cornerradius, arrowwidth, arrowheight);
-//       if (arrowheight > 0) {
-//         svg.append('path')
-//           .attr('class', 'linkarrowoutline')
-//           .attr('d', p.arrowpath);
-//         svg.append('path')
-//           .attr('class', 'linkarrow')
-//           .attr('d', p.arrowpath);
-//       }
-//       svg.append('path')
-//         .attr('class', 'linkoutline')
-//         .attr('d', p.routepath)
-//         .style('stroke', 'white')
-//         .style('stroke-width', 2)
-//         .attr('fill', 'none');
-//       svg.append('path')
-//         .attr('class', 'link')
-//         .attr('d', p.routepath)
-//         .style('stroke', 'black')
-//         .attr('fill', 'none')
-//     });
-
-//     // svg.selectAll(".node-outer")
-//     //   .attr("x", (d: any) => d.routerNode.bounds.x - margin)
-//     //   .attr("y", (d: any) => d.routerNode.bounds.y - margin)
-//     //   .attr("width", (d: any) => d.routerNode.bounds.width() + 2 * margin)
-//     //   .attr("height", (d: any) => d.routerNode.bounds.height() + 2 * margin);
-
-//     svg.selectAll(".node")
-//       .attr("x", (d: any) => d.routerNode.bounds.x)
-//       .attr("y", (d: any) => d.routerNode.bounds.y)
-//       .attr("width", (d: any) => d.routerNode.bounds.width())
-//       .attr("height", (d: any) => d.routerNode.bounds.height());
-
-//     svg.selectAll(".label")
-//       .attr("x", (d: any) => d.routerNode.bounds.x + d.routerNode.bounds.width()/2)
-//       .attr("y", (d: any) => d.routerNode.bounds.y + d.routerNode.bounds.height()/2)
-
-//     let groupPadding = margin - groupMargin;
-//     // svg.selectAll(".group").transition().attr('x', (d: any) => d.routerNode.bounds.x - groupPadding)
-//     //   .attr('y', (d: any) => d.routerNode.bounds.y + 2 * groupPadding)
-//     //   .attr('width', (d: any) => d.routerNode.bounds.width() - groupPadding)
-//     //   .attr('height', (d: any) => d.routerNode.bounds.height() - groupPadding);
-//     svg.selectAll(".group")
-//       .attr('x', (d: any) => d.routerNode.bounds.x - groupMargin)
-//       .attr('y', (d: any) => d.routerNode.bounds.y - groupMargin)
-//       .attr('width', (d: any) => d.routerNode.bounds.width() + 2 * groupMargin)
-//       .attr('height', (d: any) => d.routerNode.bounds.height() + 2 * groupMargin);
-//   };
-//   updateGridify();
-
-//   let eventStart: any = {}, ghosts: any = null;
-
-//   function getEventPos() {
-//     let ev = <any>d3.event;
-//     let e =  typeof TouchEvent !== 'undefined' && ev.sourceEvent instanceof TouchEvent ? (ev.sourceEvent).changedTouches[0] : ev.sourceEvent;
-//     return { x: e.clientX, y: e.clientY };
-//   }
-//   function dragStart(d: any) {
-//     console.log(d);
-//     ghosts = [1, 2].map((i) => svg.append('rect')
-//       .attr('class', 'ghost')
-//       .attr('x', d.routerNode.bounds.x)
-//       .attr('y', d.routerNode.bounds.y)
-//       .attr('width', d.routerNode.bounds.width())
-//       .attr('height', d.routerNode.bounds.height())
-//     );
-//     eventStart[d.routerNode.id] = getEventPos();
-//   }
-//   function getDragPos(d: any) {
-//     const p = getEventPos();
-//     const startPos = eventStart[d.routerNode.id];
-//     return { x: d.routerNode.bounds.x + p.x - startPos.x, y: d.routerNode.bounds.y + p.y - startPos.y };
-//   }
-//   function drag(d: any) {
-//     const p = getDragPos(d);
-//     ghosts[1]
-//       .attr('x', p.x)
-//       .attr('y', p.y)
-//   }
-//   function dragEnd(d: any) {
-//     let dropPos = getDragPos(d);
-//     delete eventStart[d.routerNode.id];
-//     d.x = dropPos.x;
-//     d.y = dropPos.y;
-//     ghosts.forEach((g: any) => g.remove());
-//     if (Object.keys(eventStart).length === 0) {
-//       updateGridify();
-//     }
-//   }
-//   let dragListener = d3.drag()
-//       .on("start", dragStart)
-//       .on("drag", drag)
-//       .on("end", dragEnd);
-//   // @ts-ignore
-//   node.call(dragListener);
-//   // @ts-ignore
-//   label.call(dragListener);
-// };
-
 type ReactomeItem = {
   stId: string;
   type: "compound" | "event" | "pathway";
@@ -288,14 +42,29 @@ try {
   initialHidden = [];
 }
 const hidden = ref<ReactomeItem[]>(initialHidden);
+const getHiddenNode = (node: NamedNode) => {
+  return hidden.value.find((d) => d.stId === node.stId);
+};
 
 const fontSize = ref(+(localStorage.getItem("fontSize") || 8));
 const nodeSize = ref(+(localStorage.getItem("nodeSize") || 70));
 const padding = ref(+(localStorage.getItem("padding") || 35));
 const rounded = ref(+(localStorage.getItem("rounded") || 0));
 const pathwayIdInput = ref("");
+const showNodePopup = ref(false);
+const popupX = ref(200);
+const popupY = ref(200);
+let currentNode: NamedNode | null = null;
 
 const showLabel = ref<{[id: string]: boolean}>({});
+
+// By default compounds show label, events hide label
+const getShowLabel = (d: NamedNode) => {
+  if (d.type === "compound") {
+    return showLabel.value[d.stId] === undefined || showLabel.value[d.stId];
+  }
+  return !!showLabel.value[d.stId];
+}
 
 watchEffect(() => {
   localStorage.setItem("interest", interest.value);
@@ -372,7 +141,7 @@ const graph = computed<Promise<{nodes: NamedNode[], links: Link<NamedNode>[]}>>(
 
   events.forEach((event: any) => {
     if (!nodeMap[event.displayName]) {
-      if (hidden.value.find((d) => d.stId === event.stId)?.state === "hide") {
+      if (getHiddenNode(event)?.state === "hide") {
         return;
       }
       nodes.push({ name: event.name, displayName: event.displayName, stId: event.stId, type: "event", ...initialPosition });
@@ -387,10 +156,10 @@ const graph = computed<Promise<{nodes: NamedNode[], links: Link<NamedNode>[]}>>(
       if (!(typeof compound === 'object' && compound !== null)) {
         return;
       }
-      if (hidden.value.find((d) => d.stId === compound.stId)?.state === "hide") {
+      if (getHiddenNode(compound)?.state === "hide") {
         return;
       }
-      if (!nodeMap[compound.displayName] || hidden.value.find((d) => d.stId === compound.stId)?.state === "split") {
+      if (!nodeMap[compound.displayName] || getHiddenNode(compound)?.state === "split") {
         nodes.push({ name: compound.name, displayName: compound.displayName, stId: compound.stId, type: "compound", ...initialPosition });
         nodeMap[compound.displayName] = nodes[nodes.length - 1];
       }
@@ -401,10 +170,10 @@ const graph = computed<Promise<{nodes: NamedNode[], links: Link<NamedNode>[]}>>(
       if (!(typeof compound === 'object' && compound !== null)) {
         return;
       }
-      if (hidden.value.find((d) => d.stId === compound.stId)?.state === "hide") {
+      if (getHiddenNode(compound)?.state === "hide") {
         return;
       }
-      if (!nodeMap[compound.displayName] || hidden.value.find((d) => d.stId === compound.stId)?.state === "split") {
+      if (!nodeMap[compound.displayName] || getHiddenNode(compound)?.state === "split") {
         nodes.push({ name: compound.name, displayName: compound.displayName, stId: compound.stId, type: "compound", ...initialPosition });
         nodeMap[compound.displayName] = nodes[nodes.length - 1];
       }
@@ -452,16 +221,7 @@ watchEffect(async () => {
     .attr("ry", nodeSize.value * rounded.value / 2)
     .style("fill", (d) => color(d))
     .style("stroke", "black")
-    .style("stroke-width", 1)
-    .on("dblclick", (d) => {
-      hidden.value.push({
-        stId: d.stId,
-        type: d.type,
-        name: d.name,
-        displayName: d.displayName,
-        state: "hide",
-      });
-    });
+    .style("stroke-width", 1);
 
   node.append("title")
     .text((d) => d.displayName);
@@ -480,7 +240,7 @@ watchEffect(async () => {
     .style("fill", (d) => (d.type === "compound" && lines > 1) ? "white" : "black")
     .style("paint-order", "stroke");
 
-  tspan = label.append("tspan").text((d) => (d.type === "compound" || showLabel.value[d.stId]) ? d.name[0] : "");
+  tspan = label.append("tspan").text((d) => getShowLabel(d) ? d.name[0] : "");
 
   label.append("title").text((d) => d.displayName);
 
@@ -545,7 +305,6 @@ watchEffect(async () => {
   function getEventPos() {
     let ev = <any>d3.event;
     let e =  typeof TouchEvent !== 'undefined' && ev.sourceEvent instanceof TouchEvent ? (ev.sourceEvent).changedTouches[0] : ev.sourceEvent;
-    // return { x: e.clientX, y: e.clientY };
     const transform = d3.zoomTransform(g.node()!);
     const [x, y] = transform.invert([e.clientX, e.clientY]);
     return {x, y};
@@ -561,6 +320,10 @@ watchEffect(async () => {
     return { x: d.bounds.x + p.x - startPos.x, y: d.bounds.y + p.y - startPos.y };
   }
   function drag(d: any) {
+    const p = getDragPos(d);
+    if (Math.abs(d.bounds.x - p.x) < 5 && Math.abs(d.bounds.y - p.y) < 2) {
+      return;
+    }
     if (!didDrag) {
       ghosts = [1, 2].map((i) => g.append('rect')
         .attr('class', 'ghost')
@@ -571,18 +334,21 @@ watchEffect(async () => {
       );
       didDrag = true;
     }
-    const p = getDragPos(d);
     ghosts[1]
       .attr('x', p.x)
       .attr('y', p.y)
   }
   function dragEnd(d: any) {
+    let dropPos = getDragPos(d);
     if (!didDrag) {
-      showLabel.value[d.stId] = !showLabel.value[d.stId];
+      currentNode = d;
+      const rect = diagram.value!.getBoundingClientRect();
+      popupX.value = transform.applyX(dropPos.x) + rect.left + 20;
+      popupY.value = transform.applyY(dropPos.y) + rect.top + 20;
+      showNodePopup.value = true;
       return;
     }
     ghosts.forEach((g: any) => g.remove());
-    let dropPos = getDragPos(d);
     delete eventStart[d.index];
     d.x = dropPos.x;
     d.y = dropPos.y;
@@ -616,10 +382,7 @@ watchEffect(async () => {
 watchEffect(() => {
   Object.entries(showLabel.value);
   if (tspan) {
-    tspan.text((d) => {
-      // console.log(showLabel.value[d.stId], d.name[0], d.type === "compound" || !!showLabel.value[d.stId]);
-      return (d.type === "compound" || !!showLabel.value[d.stId]) ? d.name[0] : "";
-    });
+    tspan.text((d) => getShowLabel(d) ? d.name[0] : "");
   }
 });
 
@@ -693,6 +456,53 @@ const download = () => {
   img.src = url;
 };
 
+const hideNode = () => {
+  showNodePopup.value = false;
+  if (!currentNode) {
+    return;
+  }
+  const found = getHiddenNode(currentNode);
+  if (found) {
+    found.state = "hide";
+    return;
+  }
+  hidden.value.push({
+    stId: currentNode.stId,
+    type: currentNode.type,
+    name: currentNode.name,
+    displayName: currentNode.displayName,
+    state: "hide",
+  });
+};
+
+const splitNode = () => {
+  showNodePopup.value = false;
+  if (!currentNode) {
+    return;
+  }
+  const found = getHiddenNode(currentNode);
+  if (found) {
+    found.state = found.state === "split" ? "show" : "split";
+    return;
+  }
+  hidden.value.push({
+    stId: currentNode.stId,
+    type: currentNode.type,
+    name: currentNode.name,
+    displayName: currentNode.displayName,
+    state: "split",
+  });
+};
+
+const toggleNodeLabel = () => {
+  showNodePopup.value = false;
+  if (!currentNode) {
+    return;
+  }
+  showLabel.value[currentNode.stId] = !getShowLabel(currentNode);
+};
+
+
 </script>
 
 <template>
@@ -716,6 +526,13 @@ const download = () => {
       </div>
       <div class="flex flex-col items-center justify-center">
         <div ref="diagram"></div>
+        <div :class="{'bg-gray-200': true, 'p-2': true, 'rounded-lg': true, fixed: true, hidden: !showNodePopup}" :style="{left: `${popupX}px`, top: `${popupY}px`}">
+          <div class="mx-2 mb-1 font-semibold">{{ currentNode?.displayName }}</div>
+          <button class="btn btn-sm btn-ghost gap-2 normal-case" @click="hideNode"><span class="material-symbols-outlined">visibility_off</span>Hide</button>
+          <button v-if="currentNode && currentNode.type === 'compound'" :class="[{'btn-ghost': !currentNode || !(getHiddenNode(currentNode)?.state === 'split')}, 'btn', 'btn-sm', 'gap-2', 'normal-case', 'ml-2']" @click="splitNode"><span class="material-symbols-outlined">call_split</span>Split</button>
+          <button class="btn btn-sm btn-ghost ml-2 gap-2 normal-case" @click="toggleNodeLabel"><span class="material-symbols-outlined">label</span>{{!currentNode || !getShowLabel(currentNode) ? "Show" : "Hide"}} Label</button>
+          <button class="btn btn-sm btn-ghost ml-2" @click="showNodePopup = false"><span class="material-symbols-outlined">close</span></button>
+        </div>
       </div>
     </div>
     <div class="drawer-side">
