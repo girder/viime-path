@@ -299,7 +299,8 @@ watchEffect(async () => {
   };
   updateGridify();
 
-  let eventStart: any = {}, ghosts: any = null;
+  let eventStart = {x: 0, y: 0};
+  let ghosts: any = null;
 
   function getEventPos() {
     let ev = <any>d3.event;
@@ -311,12 +312,11 @@ watchEffect(async () => {
   let didDrag = false;
   function dragStart(d: any) {
     didDrag = false;
-    eventStart[d.index] = getEventPos();
+    eventStart = getEventPos();
   }
   function getDragPos(d: any) {
     const p = getEventPos();
-    const startPos = eventStart[d.index];
-    return { x: d.bounds.x + p.x - startPos.x, y: d.bounds.y + p.y - startPos.y };
+    return { x: d.bounds.x + p.x - eventStart.x, y: d.bounds.y + p.y - eventStart.y };
   }
   function drag(d: any) {
     const p = getDragPos(d);
@@ -348,12 +348,9 @@ watchEffect(async () => {
       return;
     }
     ghosts.forEach((g: any) => g.remove());
-    delete eventStart[d.index];
     d.x = dropPos.x;
     d.y = dropPos.y;
-    if (Object.keys(eventStart).length === 0) {
-      updateGridify();
-    }
+    updateGridify();
   }
   let dragListener = d3.drag()
       .on("start", dragStart)
@@ -528,7 +525,7 @@ const toggleNodeLabel = () => {
         <div :class="{'bg-gray-200': true, 'p-2': true, 'rounded-lg': true, fixed: true, hidden: !showNodePopup}" :style="{left: `${popupX}px`, top: `${popupY}px`}">
           <div class="mx-2 mb-1 font-semibold">{{ currentNode?.displayName }}</div>
           <button class="btn btn-sm btn-ghost gap-2 normal-case" @click="hideNode"><span class="material-symbols-outlined">visibility_off</span>Hide</button>
-          <button v-if="currentNode && currentNode.type === 'compound'" :class="[{'btn-ghost': !currentNode || !(getHiddenNode(currentNode)?.state === 'split')}, 'btn', 'btn-sm', 'gap-2', 'normal-case', 'ml-2']" @click="splitNode"><span class="material-symbols-outlined">call_split</span>Split</button>
+          <button v-if="currentNode && currentNode.type === 'compound'" class="btn btn-sm btn-ghost ml-2 gap-2 normal-case" @click="splitNode"><span class="material-symbols-outlined">{{ currentNode && getHiddenNode(currentNode)?.state === 'split' ? 'call_merge' : 'call_split' }}</span>{{ currentNode && getHiddenNode(currentNode)?.state === 'split' ? "Merge" : "Split" }}</button>
           <button class="btn btn-sm btn-ghost ml-2 gap-2 normal-case" @click="toggleNodeLabel"><span class="material-symbols-outlined">label</span>{{!currentNode || !getShowLabel(currentNode) ? "Show" : "Hide"}} Label</button>
           <button class="btn btn-sm btn-ghost ml-2" @click="showNodePopup = false"><span class="material-symbols-outlined">close</span></button>
         </div>
