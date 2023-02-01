@@ -122,6 +122,8 @@ interface NamedNode extends Node {
   displayName: string;
 };
 
+const cachedPositions: {[id: string]: {x: number, y: number}} = {};
+
 const graph = computed<Promise<{nodes: NamedNode[], links: Link<NamedNode>[]}>>(async () => {
   hidden.value.map((d) => d.state);
   nodeSize.value;
@@ -143,7 +145,7 @@ const graph = computed<Promise<{nodes: NamedNode[], links: Link<NamedNode>[]}>>(
       if (getHiddenNode(event)?.state === "hide") {
         return;
       }
-      nodes.push({ name: event.name, displayName: event.displayName, stId: event.stId, type: "event", ...initialPosition });
+      nodes.push({ name: event.name, displayName: event.displayName, stId: event.stId, type: "event", ...initialPosition, ...(cachedPositions[event.stId] || {}) });
       nodeMap[event.displayName] = nodes[nodes.length - 1];
     }
     const eventNode = nodeMap[event.displayName];
@@ -159,7 +161,7 @@ const graph = computed<Promise<{nodes: NamedNode[], links: Link<NamedNode>[]}>>(
         return;
       }
       if (!nodeMap[compound.displayName] || getHiddenNode(compound)?.state === "split") {
-        nodes.push({ name: compound.name, displayName: compound.displayName, stId: compound.stId, type: "compound", ...initialPosition });
+        nodes.push({ name: compound.name, displayName: compound.displayName, stId: compound.stId, type: "compound", ...initialPosition, ...(cachedPositions[event.stId] || {}) });
         nodeMap[compound.displayName] = nodes[nodes.length - 1];
       }
       links.push({ source: nodeMap[compound.displayName], target: eventNode });
@@ -173,7 +175,7 @@ const graph = computed<Promise<{nodes: NamedNode[], links: Link<NamedNode>[]}>>(
         return;
       }
       if (!nodeMap[compound.displayName] || getHiddenNode(compound)?.state === "split") {
-        nodes.push({ name: compound.name, displayName: compound.displayName, stId: compound.stId, type: "compound", ...initialPosition });
+        nodes.push({ name: compound.name, displayName: compound.displayName, stId: compound.stId, type: "compound", ...initialPosition, ...(cachedPositions[event.stId] || {}) });
         nodeMap[compound.displayName] = nodes[nodes.length - 1];
       }
       links.push({ source: eventNode, target: nodeMap[compound.displayName] });
@@ -205,7 +207,7 @@ watchEffect(async () => {
     // .linkDistance(nodeSize.value * 1.5)
     // .symmetricDiffLinkLengths(5)
     // .start(1000, 0, 100, 100, false);
-    .start(100, 0, 10, 10, false);
+    .start(10, 0, 10, 10, false);
 
   const nudge = 4;
   const margin = 5;
@@ -244,7 +246,7 @@ watchEffect(async () => {
   label.append("title").text((d) => d.displayName);
 
   const updateGridify = () => {
-    layout.start(0, 0, 0, 10, false, false);
+    layout.start(0, 0, 0, 0, false, false);
     nodes.forEach((node: any) => {
       node.bounds.x += margin;
       node.bounds.y += margin;
@@ -296,6 +298,10 @@ watchEffect(async () => {
       .attr("y", (d: any) => lines > 1 ? d.bounds.y + d.bounds.height()/2 : d.bounds.y - fontSize.value / 2)
     g.selectAll(".tspan")
       .attr("x", (d: any) => d.parent.bounds.x + d.parent.bounds.width()/2)
+
+    nodes.forEach((node) => {
+      cachedPositions[node.stId] = {x: node.x, y: node.y};
+    });
   };
   updateGridify();
 
