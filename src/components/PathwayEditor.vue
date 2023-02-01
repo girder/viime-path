@@ -3,7 +3,6 @@ import { ref, watchEffect, computed } from 'vue'
 import * as d3 from 'd3';
 import { Node, Link, Layout } from '../WebCola/src/layout';
 import { GridRouter } from '../WebCola/src/gridrouter';
-// import { gridify, powerGraphGridLayout } from '../WebCola/src/batch';
 
 const diagram = ref<HTMLDivElement | null>(null);
 const canvas = ref<HTMLCanvasElement | null>(null);
