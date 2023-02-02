@@ -276,7 +276,7 @@ watchEffect(async () => {
 
   layout = new Layout()
     .convergenceThreshold(1e-3)
-    // .size([width, height])
+    .size([diagram.value!.clientWidth, diagram.value!.clientHeight])
     .avoidOverlaps(true)
     .nodes(nodes)
     .links(links)
