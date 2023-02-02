@@ -193,11 +193,13 @@ const updateGridify = async () => {
 
   const {nodes} = await graph.value;
   const margin = 5;
+  const size = nodeSize.value - 2 * margin;
   nodes.forEach((node: any) => {
-    node.bounds.x += margin;
-    node.bounds.y += margin;
-    node.bounds.X -= 2 * margin;
-    node.bounds.Y -= 2 * margin;
+    const center = {x: (node.bounds.X + node.bounds.x)/2, y: (node.bounds.Y + node.bounds.y)/2 };
+    node.bounds.x = center.x - size / 2;
+    node.bounds.y = center.y - size / 2;
+    node.bounds.X = center.x + size / 2;
+    node.bounds.Y = center.y + size / 2;
   });
 
   let gridrouter = new GridRouter(layout.nodes(), {
