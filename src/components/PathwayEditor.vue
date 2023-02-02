@@ -186,17 +186,94 @@ const graph = computed<Promise<{nodes: NamedNode[], links: Link<NamedNode>[]}>>(
 
 let tspan: d3.Selection<SVGTSpanElement, NamedNode, SVGGElement, unknown>;
 let transform = d3.zoomIdentity;
+let mainGroup: d3.Selection<SVGGElement, unknown, null, undefined>;
+let linksGroup: d3.Selection<SVGGElement, unknown, null, undefined>;
+let layout: Layout;
 
-watchEffect(async () => {
+const updateGridify = async () => {
+  layout.start(0, 0, 0, 0, false, false);
+
+  const {nodes} = await graph.value;
+  const margin = 5;
+  nodes.forEach((node: any) => {
+    node.bounds.x += margin;
+    node.bounds.y += margin;
+    node.bounds.X -= 2 * margin;
+    node.bounds.Y -= 2 * margin;
+  });
+
+  let gridrouter = new GridRouter(layout.nodes(), {
+      getChildren: (v: any) => v.children,
+      getBounds: v => v.bounds
+  }, margin);
+  const nudge = 4;
+  const routes = gridrouter.routeEdges<any>(layout.links(), nudge, (e) => e.source.index, e=> e.target.index);
+
+  linksGroup.selectAll('path').remove();
+  routes.forEach(route => {
+    var cornerradius = 5;
+    var arrowwidth = 3;
+    var arrowheight = 7;
+    var p = GridRouter.getRoutePath(route, cornerradius, arrowwidth, arrowheight);
+    if (arrowheight > 0) {
+      linksGroup.append('path')
+        .attr('class', 'linkarrowoutline')
+        .attr('d', p.arrowpath);
+        linksGroup.append('path')
+        .attr('class', 'linkarrow')
+        .attr('d', p.arrowpath);
+    }
+    linksGroup.append('path')
+      .attr('class', 'linkoutline')
+      .attr('d', p.routepath)
+      .style('stroke', 'white')
+      .style('stroke-width', 2)
+      .attr('fill', 'none');
+    linksGroup.append('path')
+      .attr('class', 'link')
+      .attr('d', p.routepath)
+      .style('stroke', 'black')
+      .attr('fill', 'none')
+  });
+
+  mainGroup.selectAll(".node")
+    .attr("x", (d: any) => d.bounds.x)
+    .attr("y", (d: any) => d.bounds.y)
+    .attr("width", (d: any) => d.bounds.width())
+    .attr("height", (d: any) => d.bounds.height())
+    .attr("rx", nodeSize.value * rounded.value / 2)
+    .attr("ry", nodeSize.value * rounded.value / 2)
+    .style("fill", (d: any) => color(d));
+
+  mainGroup.selectAll(".label")
+    .attr("x", (d: any) => d.bounds.x + d.bounds.width()/2)
+    .attr("y", (d: any) => nodeSize.value > 3 * fontSize.value ? d.bounds.y + d.bounds.height()/2 : d.bounds.y - fontSize.value / 2)
+    .style("font-size", fontSize.value)
+    .style("stroke", (d) => nodeSize.value > 3 * fontSize.value ? "black" : "white")
+    .style("fill", (d) => nodeSize.value > 3 * fontSize.value ? "white" : "black");
+  mainGroup.selectAll(".tspan")
+    .attr("x", (d: any) => d.parent.bounds.x + d.parent.bounds.width()/2)
+
+  nodes.forEach((node) => {
+    cachedPositions[node.stId] = {x: node.x, y: node.y};
+  });
+};
+
+watchEffect(() => {
   fontSize.value;
   rounded.value;
+  if (layout) {
+    updateGridify();
+  }
+});
 
+watchEffect(async () => {
   const {nodes, links} = await graph.value;
   diagram.value?.replaceChildren();
   const svg = d3.select(diagram.value).append('svg').attr('width', width).attr('height', height);
-  const g = svg.append("g").attr("transform", transform as any);
+  mainGroup = svg.append("g").attr("transform", transform as any);
 
-  const layout = new Layout()
+  layout = new Layout()
     .convergenceThreshold(1e-3)
     .size([width, height])
     .avoidOverlaps(true)
@@ -207,161 +284,98 @@ watchEffect(async () => {
     // .linkDistance(nodeSize.value * 1.5)
     // .symmetricDiffLinkLengths(5)
     // .start(1000, 0, 100, 100, false);
-    .start(10, 0, 10, 10, false);
+    .start(100, 0, 10, 10, false);
 
-  const nudge = 4;
-  const margin = 5;
+  linksGroup = mainGroup.append("g");
 
-  const linksGroup = g.append("g");
-
-  const node = g.selectAll(".node")
+  const node = mainGroup.selectAll(".node")
     .data(nodes)
     .enter().append("rect")
     .attr("class", "node")
-    .attr("rx", nodeSize.value * rounded.value / 2)
-    .attr("ry", nodeSize.value * rounded.value / 2)
-    .style("fill", (d) => color(d))
     .style("stroke", "black")
     .style("stroke-width", 1);
 
   node.append("title")
     .text((d) => d.displayName);
 
-  const lines = Math.max(1, Math.floor(nodeSize.value / fontSize.value) - 1);
-
-  const label = g.selectAll(".label")
+  const label = mainGroup.selectAll(".label")
     .data(nodes)
     .enter().append("text")
     .attr("class", "label")
-    .style("font-size", fontSize.value)
     .style("text-anchor", "middle")
     .style("dominant-baseline", "middle")
-    .style("stroke", (d) => (d.type === "compound" && lines > 1) ? "black" : "white")
     .style("stroke-width", 2)
-    .style("fill", (d) => (d.type === "compound" && lines > 1) ? "white" : "black")
     .style("paint-order", "stroke");
 
   tspan = label.append("tspan").text((d) => getShowLabel(d) ? d.name[0] : "");
 
   label.append("title").text((d) => d.displayName);
 
-  const updateGridify = () => {
-    layout.start(0, 0, 0, 0, false, false);
-    nodes.forEach((node: any) => {
-      node.bounds.x += margin;
-      node.bounds.y += margin;
-      node.bounds.X -= 2 * margin;
-      node.bounds.Y -= 2 * margin;
-    });
-
-    let gridrouter = new GridRouter(layout.nodes(), {
-        getChildren: (v: any) => v.children,
-        getBounds: v => v.bounds
-    }, margin);
-    const routes = gridrouter.routeEdges<any>(layout.links(), nudge, (e) => e.source.index, e=> e.target.index);
-
-    linksGroup.selectAll('path').remove();
-    routes.forEach(route => {
-      var cornerradius = 5;
-      var arrowwidth = 3;
-      var arrowheight = 7;
-      var p = GridRouter.getRoutePath(route, cornerradius, arrowwidth, arrowheight);
-      if (arrowheight > 0) {
-        linksGroup.append('path')
-          .attr('class', 'linkarrowoutline')
-          .attr('d', p.arrowpath);
-          linksGroup.append('path')
-          .attr('class', 'linkarrow')
-          .attr('d', p.arrowpath);
-      }
-      linksGroup.append('path')
-        .attr('class', 'linkoutline')
-        .attr('d', p.routepath)
-        .style('stroke', 'white')
-        .style('stroke-width', 2)
-        .attr('fill', 'none');
-      linksGroup.append('path')
-        .attr('class', 'link')
-        .attr('d', p.routepath)
-        .style('stroke', 'black')
-        .attr('fill', 'none')
-    });
-
-    g.selectAll(".node")
-      .attr("x", (d: any) => d.bounds.x)
-      .attr("y", (d: any) => d.bounds.y)
-      .attr("width", (d: any) => d.bounds.width())
-      .attr("height", (d: any) => d.bounds.height());
-
-    g.selectAll(".label")
-      .attr("x", (d: any) => d.bounds.x + d.bounds.width()/2)
-      .attr("y", (d: any) => lines > 1 ? d.bounds.y + d.bounds.height()/2 : d.bounds.y - fontSize.value / 2)
-    g.selectAll(".tspan")
-      .attr("x", (d: any) => d.parent.bounds.x + d.parent.bounds.width()/2)
-
-    nodes.forEach((node) => {
-      cachedPositions[node.stId] = {x: node.x, y: node.y};
-    });
-  };
   updateGridify();
 
   let eventStart = {x: 0, y: 0};
-  let ghosts: any = null;
+  let nodeStart = {x: 0, y: 0};
+  let didDrag = false;
 
-  function getEventPos() {
+  const getEventPos = () => {
     let ev = <any>d3.event;
     let e =  typeof TouchEvent !== 'undefined' && ev.sourceEvent instanceof TouchEvent ? (ev.sourceEvent).changedTouches[0] : ev.sourceEvent;
-    const transform = d3.zoomTransform(g.node()!);
+    const transform = d3.zoomTransform(mainGroup.node()!);
     const [x, y] = transform.invert([e.clientX, e.clientY]);
     return {x, y};
-  }
-  let didDrag = false;
-  function dragStart(d: any) {
+  };
+
+  const dragStart = (d: NamedNode) => {
     didDrag = false;
     eventStart = getEventPos();
-  }
-  function getDragPos(d: any) {
+    nodeStart = { x: d.x, y: d.y };
+  };
+
+  const getDragPos = () => {
     const p = getEventPos();
-    return { x: d.bounds.x + p.x - eventStart.x, y: d.bounds.y + p.y - eventStart.y };
-  }
-  function drag(d: any) {
-    const p = getDragPos(d);
-    if (Math.abs(d.bounds.x - p.x) < 5 && Math.abs(d.bounds.y - p.y) < 2) {
+    return {
+      x: nodeStart.x + Math.round((p.x - eventStart.x)/nodeSize.value)*nodeSize.value,
+      y: nodeStart.y + Math.round((p.y - eventStart.y)/nodeSize.value)*nodeSize.value,
+    };
+  };
+
+  const drag = (d: NamedNode) => {
+    const p = getDragPos();
+    if (Math.abs(eventStart.x - p.x) < 2 && Math.abs(eventStart.y - p.y) < 2) {
       return;
     }
-    if (!didDrag) {
-      ghosts = [1, 2].map((i) => g.append('rect')
-        .attr('class', 'ghost')
-        .attr('x', d.bounds.x)
-        .attr('y', d.bounds.y)
-        .attr('width', d.bounds.width())
-        .attr('height', d.bounds.height())
-      );
-      didDrag = true;
+    didDrag = true;
+    if (p.x !== d.x || p.y !== d.y) {
+      d.x = p.x;
+      d.y = p.y;
+      // @ts-ignore
+      d.bounds.x = p.x;
+      // @ts-ignore
+      d.bounds.y = p.y;
+      updateGridify();
     }
-    ghosts[1]
-      .attr('x', p.x)
-      .attr('y', p.y)
-  }
-  function dragEnd(d: any) {
-    let dropPos = getDragPos(d);
+  };
+
+  const dragEnd = (d: NamedNode) => {
     if (!didDrag) {
       currentNode = d;
       const rect = diagram.value!.getBoundingClientRect();
-      popupX.value = transform.applyX(dropPos.x) + rect.left + 20;
-      popupY.value = transform.applyY(dropPos.y) + rect.top + 20;
+      const p = getDragPos();
+      popupX.value = transform.applyX(p.x) + rect.left + 20;
+      popupY.value = transform.applyY(p.y) + rect.top + 20;
       showNodePopup.value = true;
       return;
     }
-    ghosts.forEach((g: any) => g.remove());
-    d.x = dropPos.x;
-    d.y = dropPos.y;
-    updateGridify();
-  }
+  };
+
   let dragListener = d3.drag()
-      .on("start", dragStart)
-      .on("drag", drag)
-      .on("end", dragEnd);
+    // @ts-ignore
+    .on("start", dragStart)
+    // @ts-ignore
+    .on("drag", drag)
+    // @ts-ignore
+    .on("end", dragEnd);
+
   // @ts-ignore
   node.call(dragListener);
   // @ts-ignore
@@ -377,7 +391,7 @@ watchEffect(async () => {
     .on("dblclick.zoom", null);
   function zoomed() {
     transform = d3.event.transform;
-    g.attr("transform", transform as any);
+    mainGroup.attr("transform", transform as any);
   }
 });
 
