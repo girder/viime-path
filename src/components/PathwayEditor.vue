@@ -7,8 +7,6 @@ import { GridRouter } from '../WebCola/src/gridrouter';
 const diagram = ref<HTMLDivElement | null>(null);
 const canvas = ref<HTMLCanvasElement | null>(null);
 
-const width = 1500;
-const height = 1000;
 const color = (d: NamedNode) => {
   return {
     event: "white",
@@ -270,12 +268,13 @@ watchEffect(() => {
 watchEffect(async () => {
   const {nodes, links} = await graph.value;
   diagram.value?.replaceChildren();
-  const svg = d3.select(diagram.value).append('svg').attr('width', width).attr('height', height);
+  // const svg = d3.select(diagram.value).append('svg').attr('width', width).attr('height', height);
+  const svg = d3.select(diagram.value).append('svg').attr('class', 'w-full h-full');
   mainGroup = svg.append("g").attr("transform", transform as any);
 
   layout = new Layout()
     .convergenceThreshold(1e-3)
-    .size([width, height])
+    // .size([width, height])
     .avoidOverlaps(true)
     .nodes(nodes)
     .links(links)
@@ -341,7 +340,8 @@ watchEffect(async () => {
 
   const drag = (d: NamedNode) => {
     const p = getDragPos();
-    if (Math.abs(eventStart.x - p.x) < 2 && Math.abs(eventStart.y - p.y) < 2) {
+    const minDragDistance = 5;
+    if (Math.abs(nodeStart.x - p.x) < minDragDistance && Math.abs(nodeStart.y - p.y) < minDragDistance) {
       return;
     }
     didDrag = true;
@@ -382,7 +382,7 @@ watchEffect(async () => {
   label.call(dragListener);
 
   const zoom = d3.zoom()
-      .extent([[0, 0], [width, height]])
+      .extent([[0, 0], [diagram.value!.clientWidth, diagram.value!.clientHeight]])
       .scaleExtent([0.1, 10.0])
       .on("zoom", zoomed);
 
@@ -448,8 +448,8 @@ const downloadSVG = () => {
 
 const download = () => {
   const svg = d3.select(diagram.value).select("svg").node() as any;
-  canvas.value?.setAttribute("width", `${width}`);
-  canvas.value?.setAttribute("height", `${height}`);
+  canvas.value?.setAttribute("width", `${diagram.value!.clientWidth}`);
+  canvas.value?.setAttribute("height", `${diagram.value!.clientHeight}`);
   var ctx = canvas.value!.getContext('2d')!;
   var data = (new XMLSerializer()).serializeToString(svg);
   var DOMURL = window.URL || window.webkitURL || window;
@@ -459,7 +459,7 @@ const download = () => {
   var url = DOMURL.createObjectURL(svgBlob);
 
   img.onload = function () {
-    ctx.drawImage(img, 0, 0, width, height);
+    ctx.drawImage(img, 0, 0, diagram.value!.clientWidth, diagram.value!.clientHeight);
     DOMURL.revokeObjectURL(url);
 
     var imgURI = canvas.value!
@@ -524,9 +524,9 @@ const toggleNodeLabel = () => {
 <template>
   <div class="drawer drawer-mobile">
     <input id="app-drawer" type="checkbox" class="drawer-toggle" />
-    <div class="drawer-content">
+    <div class="drawer-content flex flex-col">
       <div
-        class="sticky top-0 z-30 flex h-16 w-full justify-center bg-opacity-90 backdrop-blur transition-all duration-100 bg-base-100 text-base-content shadow-sm">
+        class="flex h-16 w-full justify-center bg-base-100 text-base-content shadow-sm">
         <nav class="navbar w-full">
           <label for="app-drawer" class="btn btn-square drawer-button lg:hidden mr-2">
             <svg style="width:24px;height:24px" viewBox="0 0 24 24">
@@ -540,15 +540,13 @@ const toggleNodeLabel = () => {
           </div>
         </nav>
       </div>
-      <div class="flex flex-col items-center justify-center">
-        <div ref="diagram"></div>
-        <div :class="{'bg-gray-200': true, 'p-2': true, 'rounded-lg': true, fixed: true, hidden: !showNodePopup}" :style="{left: `${popupX}px`, top: `${popupY}px`}">
-          <div class="mx-2 mb-1 font-semibold">{{ currentNode?.displayName }}</div>
-          <button class="btn btn-sm btn-ghost gap-2 normal-case" @click="hideNode"><span class="material-symbols-outlined">visibility_off</span>Hide</button>
-          <button v-if="currentNode && currentNode.type === 'compound'" class="btn btn-sm btn-ghost ml-2 gap-2 normal-case" @click="splitNode"><span class="material-symbols-outlined">{{ currentNode && getHiddenNode(currentNode)?.state === 'split' ? 'call_merge' : 'call_split' }}</span>{{ currentNode && getHiddenNode(currentNode)?.state === 'split' ? "Merge" : "Split" }}</button>
-          <button class="btn btn-sm btn-ghost ml-2 gap-2 normal-case" @click="toggleNodeLabel"><span class="material-symbols-outlined">label</span>{{!currentNode || !getShowLabel(currentNode) ? "Show" : "Hide"}} Label</button>
-          <button class="btn btn-sm btn-ghost ml-2" @click="showNodePopup = false"><span class="material-symbols-outlined">close</span></button>
-        </div>
+      <div ref="diagram" class="w-full h-full"></div>
+      <div :class="{'bg-gray-200': true, 'p-2': true, 'rounded-lg': true, fixed: true, hidden: !showNodePopup}" :style="{left: `${popupX}px`, top: `${popupY}px`}">
+        <div class="mx-2 mb-1 font-semibold">{{ currentNode?.displayName }}</div>
+        <button class="btn btn-sm btn-ghost gap-2 normal-case" @click="hideNode"><span class="material-symbols-outlined">visibility_off</span>Hide</button>
+        <button v-if="currentNode && currentNode.type === 'compound'" class="btn btn-sm btn-ghost ml-2 gap-2 normal-case" @click="splitNode"><span class="material-symbols-outlined">{{ currentNode && getHiddenNode(currentNode)?.state === 'split' ? 'call_merge' : 'call_split' }}</span>{{ currentNode && getHiddenNode(currentNode)?.state === 'split' ? "Merge" : "Split" }}</button>
+        <button class="btn btn-sm btn-ghost ml-2 gap-2 normal-case" @click="toggleNodeLabel"><span class="material-symbols-outlined">label</span>{{!currentNode || !getShowLabel(currentNode) ? "Show" : "Hide"}} Label</button>
+        <button class="btn btn-sm btn-ghost ml-2" @click="showNodePopup = false"><span class="material-symbols-outlined">close</span></button>
       </div>
     </div>
     <div class="drawer-side">
