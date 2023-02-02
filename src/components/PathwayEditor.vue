@@ -341,7 +341,7 @@ watchEffect(async () => {
   const drag = (d: NamedNode) => {
     const p = getDragPos();
     const minDragDistance = 5;
-    if (Math.abs(nodeStart.x - p.x) < minDragDistance && Math.abs(nodeStart.y - p.y) < minDragDistance) {
+    if (!didDrag && Math.abs(nodeStart.x - p.x) < minDragDistance && Math.abs(nodeStart.y - p.y) < minDragDistance) {
       return;
     }
     didDrag = true;
