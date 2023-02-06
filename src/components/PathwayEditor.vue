@@ -3,6 +3,7 @@ import { ref, watchEffect, computed } from 'vue'
 import * as d3 from 'd3';
 import { Node, Link, Layout } from '../WebCola/src/layout';
 import { GridRouter } from '../WebCola/src/gridrouter';
+import { Delaunay } from 'd3-delaunay';
 
 const diagram = ref<HTMLDivElement | null>(null);
 const canvas = ref<HTMLCanvasElement | null>(null);
@@ -13,6 +14,17 @@ const color = (d: NamedNode) => {
     compound: "rgb(0, 104, 199)",
   }[d.type] || "#000";
 };
+
+const compartmentColor = d3.scaleOrdinal(d3.schemeCategory10);
+
+// Pre-bake compartment colors so they are stable
+[
+  'cytosol',
+  'nucleoplasm',
+  'mitochondrial matrix',
+  'endoplasmic reticulum lumen',
+  'extracellular region',
+].forEach((d) => compartmentColor(d));
 
 type ReactomeItem = {
   stId: string;
@@ -118,6 +130,7 @@ interface NamedNode extends Node {
   type: "event" | "compound";
   stId: string;
   displayName: string;
+  compartment?: string;
 };
 
 const cachedPositions: {[id: string]: {x: number, y: number}} = {};
@@ -159,7 +172,15 @@ const graph = computed<Promise<{nodes: NamedNode[], links: Link<NamedNode>[]}>>(
         return;
       }
       if (!nodeMap[compound.displayName] || getHiddenNode(compound)?.state === "split") {
-        nodes.push({ name: compound.name, displayName: compound.displayName, stId: compound.stId, type: "compound", ...initialPosition, ...(cachedPositions[event.stId] || {}) });
+        nodes.push({
+          name: compound.name,
+          displayName: compound.displayName,
+          stId: compound.stId,
+          type: "compound",
+          compartment: compound.displayName.match(/\[(.*?)\]/)[1],
+          ...initialPosition,
+          ...(cachedPositions[event.stId] || {}),
+        });
         nodeMap[compound.displayName] = nodes[nodes.length - 1];
       }
       links.push({ source: nodeMap[compound.displayName], target: eventNode });
@@ -173,7 +194,15 @@ const graph = computed<Promise<{nodes: NamedNode[], links: Link<NamedNode>[]}>>(
         return;
       }
       if (!nodeMap[compound.displayName] || getHiddenNode(compound)?.state === "split") {
-        nodes.push({ name: compound.name, displayName: compound.displayName, stId: compound.stId, type: "compound", ...initialPosition, ...(cachedPositions[event.stId] || {}) });
+        nodes.push({
+          name: compound.name,
+          displayName: compound.displayName,
+          stId: compound.stId,
+          type: "compound",
+          compartment: compound.displayName.match(/\[(.*?)\]/)[1],
+          ...initialPosition,
+          ...(cachedPositions[event.stId] || {}),
+        });
         nodeMap[compound.displayName] = nodes[nodes.length - 1];
       }
       links.push({ source: eventNode, target: nodeMap[compound.displayName] });
@@ -185,6 +214,7 @@ const graph = computed<Promise<{nodes: NamedNode[], links: Link<NamedNode>[]}>>(
 let tspan: d3.Selection<SVGTSpanElement, NamedNode, SVGGElement, unknown>;
 let transform = d3.zoomIdentity;
 let mainGroup: d3.Selection<SVGGElement, unknown, null, undefined>;
+let voronoiGroup: d3.Selection<SVGGElement, unknown, null, undefined>;
 let linksGroup: d3.Selection<SVGGElement, unknown, null, undefined>;
 let layout: Layout;
 
@@ -254,9 +284,26 @@ const updateGridify = async () => {
   mainGroup.selectAll(".tspan")
     .attr("x", (d: any) => d.parent.bounds.x + d.parent.bounds.width()/2)
 
+  const compoundPoints: [number, number][] = [];
+  const compounds: NamedNode[] = [];
   nodes.forEach((node) => {
     cachedPositions[node.stId] = {x: node.x, y: node.y};
+    if (node.type === 'compound') {
+      compoundPoints.push([node.x, node.y]);
+      compounds.push(node);
+    }
   });
+
+  const delaunay = Delaunay.from(compoundPoints);
+  const voronoi = delaunay.voronoi([-1e5, -1e5, diagram.value!.clientWidth + 1e5, diagram.value!.clientHeight + 1e5]);
+  voronoiGroup.selectAll('path').remove();
+  voronoiGroup.selectAll('path').data(compounds).enter()
+    .append('path')
+    .attr('d', (_d, i) => voronoi.renderCell(i))
+    .attr('stroke', 'black')
+    .attr('fill', (d) => compartmentColor(d.compartment || ''))
+    .attr('opacity', 0.25)
+    .attr('stroke-width', 0);
 };
 
 watchEffect(() => {
@@ -273,6 +320,7 @@ watchEffect(async () => {
   // const svg = d3.select(diagram.value).append('svg').attr('width', width).attr('height', height);
   const svg = d3.select(diagram.value).append('svg').attr('class', 'w-full h-full');
   mainGroup = svg.append("g").attr("transform", transform as any);
+  voronoiGroup = mainGroup.append("g");
 
   layout = new Layout()
     .convergenceThreshold(1e-3)
