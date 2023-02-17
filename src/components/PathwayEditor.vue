@@ -574,6 +574,11 @@ const toggleNodeLabel = () => {
   <div class="drawer drawer-mobile">
     <input id="app-drawer" type="checkbox" class="drawer-toggle" />
     <div class="drawer-content flex flex-col">
+      <label for="app-drawer" class="fixed btn btn-circle drawer-button lg:hidden mr-2">
+        <svg style="width:24px;height:24px" viewBox="0 0 24 24">
+          <path fill="currentColor" d="M3,6H21V8H3V6M3,11H21V13H3V11M3,16H21V18H3V16Z" />
+        </svg>
+      </label>
       <div ref="diagram" class="w-full h-full"></div>
       <div :class="{'bg-gray-200': true, 'p-2': true, 'rounded-lg': true, fixed: true, hidden: !showNodePopup}" :style="{left: `${popupX}px`, top: `${popupY}px`}">
         <div class="mx-2 mb-1 font-semibold">{{ currentNode?.displayName }}</div>
