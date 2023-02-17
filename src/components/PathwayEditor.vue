@@ -437,8 +437,7 @@ watchEffect(async () => {
       .on("zoom", zoomed);
 
   svg.call(zoom as any)
-    .call(zoom.transform as any, transform)
-    .on("dblclick.zoom", null);
+    .call(zoom.transform as any, transform);
   function zoomed() {
     transform = d3.event.transform;
     mainGroup.attr("transform", transform as any);
