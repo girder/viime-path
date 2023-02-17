@@ -574,21 +574,6 @@ const toggleNodeLabel = () => {
   <div class="drawer drawer-mobile">
     <input id="app-drawer" type="checkbox" class="drawer-toggle" />
     <div class="drawer-content flex flex-col">
-      <div
-        class="flex h-16 w-full justify-center bg-base-100 text-base-content shadow-sm">
-        <nav class="navbar w-full">
-          <label for="app-drawer" class="btn btn-square drawer-button lg:hidden mr-2">
-            <svg style="width:24px;height:24px" viewBox="0 0 24 24">
-              <path fill="currentColor" d="M3,6H21V8H3V6M3,11H21V13H3V11M3,16H21V18H3V16Z" />
-            </svg>
-          </label>
-          <div class="flex-1">
-            <span class="text-4xl">
-              <span style="color:#0068c7" class="font-semibold">Padi: Your pathway diagram editor</span>
-            </span>
-          </div>
-        </nav>
-      </div>
       <div ref="diagram" class="w-full h-full"></div>
       <div :class="{'bg-gray-200': true, 'p-2': true, 'rounded-lg': true, fixed: true, hidden: !showNodePopup}" :style="{left: `${popupX}px`, top: `${popupY}px`}">
         <div class="mx-2 mb-1 font-semibold">{{ currentNode?.displayName }}</div>
@@ -600,41 +585,49 @@ const toggleNodeLabel = () => {
     </div>
     <div class="drawer-side">
       <label for="app-drawer" class="drawer-overlay"></label>
-      <aside class="bg-base-200 max-w-xs p-2">
-        <h5 class="font-semibold mt-2">Metabolites of interest</h5>
-        <div class="text-sm">Not yet implemented.</div>
-        <textarea class="textarea textarea-bordered" rows="2" v-model="interest"></textarea>
-        <h5 class="font-semibold mt-2">Pathways</h5>
-        <div class="text-sm">Select pathway from <a href="https://reactome.org/PathwayBrowser" target="_blank" class="link">reactome</a> and enter the ID found in the reactome bottom panel. Click a list item to toggle visibility.</div>
-        <div v-for="item, index in pathways" :key="item.stId" class="flex mb-1">
-          <button class="btn btn-sm btn-circle btn-ghost" @click="pathways.splice(index, 1)"><span class="material-symbols-outlined">close</span></button>
-          <button class="btn btn-sm btn-ghost gap-2 normal-case" @click="updateState(item)" :title="item.displayName">
-            <span class="material-symbols-outlined">{{ {hide: "visibility_off", show: "visibility", split: "call_split"}[item.state] }}</span>
-            {{ `${item.displayName.substring(0, 15)}${item.displayName.length > 15 ? '...' : ''}` }}
-          </button>
+      <aside class="max-w-xs">
+        <div class="flex-1 bg-base-100 p-2">
+          <span class="text-4xl">
+            <span style="color:#0068c7; font-family:'Crushed'" class="font-semibold">Padi</span>
+          </span>
+          <div style="color:#0068c7" class="text-sm font-bold">Your pathway diagram editor</div>
         </div>
-        <input class="input input-sm input-bordered" placeholder="ID e.g. R-HSA-70171" v-model="pathwayIdInput"/><button class="btn btn-sm ml-1" @click="addPathway()">Add</button>
-        <div class="font-semibold mt-2">Hide / Split</div>
-        <div class="text-sm">Click a reaction node in the diagram to toggle label visibility. Double-click any node in the diagram to add to this list. Click a list item to toggle between show/hide/duplicate.</div>
-        <div v-for="item, index in hidden" :key="item.stId" class="flex mb-1">
-          <button class="btn btn-sm btn-circle btn-ghost" @click="hidden.splice(index, 1)"><span class="material-symbols-outlined">close</span></button>
-          <button class="btn btn-sm btn-ghost gap-2 normal-case" @click="updateState(item)" :title="item.displayName">
-            <span class="material-symbols-outlined">{{ {hide: "visibility_off", show: "visibility", split: "call_split"}[item.state] }}</span>
-            {{ `${item.displayName.substring(0, 15)}${item.displayName.length > 15 ? '...' : ''}` }}
-          </button>
-        </div>
-        <h5 class="font-semibold mt-2">Font Size ({{ fontSize }})</h5>
-        <input type="range" min="2" max="20" class="range" v-model.number="fontSize" />
-        <h5 class="font-semibold mt-2">Node Size ({{ nodeSize }})</h5>
-        <input type="range" min="10" max="100" class="range" v-model.number="nodeSize" />
-        <h5 class="font-semibold mt-2">Padding ({{ padding }})</h5>
-        <input type="range" min="10" max="100" class="range" v-model.number="padding" />
-        <h5 class="font-semibold mt-2">Rounded ({{ rounded }})</h5>
-        <input type="range" min="0" max="1" step="0.01" class="range" v-model.number="rounded" />
+        <div class="flex-1 bg-base-200 p-2">
+          <h5 class="font-semibold mt-2">Metabolites of interest</h5>
+          <div class="text-sm">Not yet implemented.</div>
+          <textarea class="textarea textarea-bordered" rows="2" v-model="interest"></textarea>
+          <h5 class="font-semibold mt-2">Pathways</h5>
+          <div class="text-sm">Select pathway from <a href="https://reactome.org/PathwayBrowser" target="_blank" class="link">reactome</a> and enter the ID found in the reactome bottom panel. Click a list item to toggle visibility.</div>
+          <div v-for="item, index in pathways" :key="item.stId" class="flex mb-1">
+            <button class="btn btn-sm btn-circle btn-ghost" @click="pathways.splice(index, 1)"><span class="material-symbols-outlined">close</span></button>
+            <button class="btn btn-sm btn-ghost gap-2 normal-case" @click="updateState(item)" :title="item.displayName">
+              <span class="material-symbols-outlined">{{ {hide: "visibility_off", show: "visibility", split: "call_split"}[item.state] }}</span>
+              {{ `${item.displayName.substring(0, 15)}${item.displayName.length > 15 ? '...' : ''}` }}
+            </button>
+          </div>
+          <input class="input input-sm input-bordered" placeholder="ID e.g. R-HSA-70171" v-model="pathwayIdInput"/><button class="btn btn-sm ml-1" @click="addPathway()">Add</button>
+          <div class="font-semibold mt-2">Hide / Split</div>
+          <div class="text-sm">Click a reaction node in the diagram to toggle label visibility. Click any node in the diagram to add it to this list. Click a list item to toggle between show/hide/duplicate.</div>
+          <div v-for="item, index in hidden" :key="item.stId" class="flex mb-1">
+            <button class="btn btn-sm btn-circle btn-ghost" @click="hidden.splice(index, 1)"><span class="material-symbols-outlined">close</span></button>
+            <button class="btn btn-sm btn-ghost gap-2 normal-case" @click="updateState(item)" :title="item.displayName">
+              <span class="material-symbols-outlined">{{ {hide: "visibility_off", show: "visibility", split: "call_split"}[item.state] }}</span>
+              {{ `${item.displayName.substring(0, 15)}${item.displayName.length > 15 ? '...' : ''}` }}
+            </button>
+          </div>
+          <h5 class="font-semibold mt-2">Font Size ({{ fontSize }})</h5>
+          <input type="range" min="2" max="20" class="range" v-model.number="fontSize" />
+          <h5 class="font-semibold mt-2">Node Size ({{ nodeSize }})</h5>
+          <input type="range" min="10" max="100" class="range" v-model.number="nodeSize" />
+          <h5 class="font-semibold mt-2">Padding ({{ padding }})</h5>
+          <input type="range" min="10" max="100" class="range" v-model.number="padding" />
+          <h5 class="font-semibold mt-2">Rounded ({{ rounded }})</h5>
+          <input type="range" min="0" max="1" step="0.01" class="range" v-model.number="rounded" />
 
-        <button class="btn block mb-2" @click="download">Download PNG</button>
-        <button class="btn block" @click="downloadSVG">Download SVG</button>
-        <canvas ref="canvas" class="hidden"></canvas>
+          <button class="btn block mb-2" @click="download">Download PNG</button>
+          <button class="btn block" @click="downloadSVG">Download SVG</button>
+          <canvas ref="canvas" class="hidden"></canvas>
+        </div>
       </aside>
     </div>
   </div>
