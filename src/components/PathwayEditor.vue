@@ -18,13 +18,26 @@ const color = (d: NamedNode) => {
 const compartmentColor = d3.scaleOrdinal(d3.schemeCategory10);
 
 // Pre-bake compartment colors so they are stable
-[
+const compartmentList = [
   'cytosol',
   'nucleoplasm',
   'mitochondrial matrix',
   'endoplasmic reticulum lumen',
   'extracellular region',
-].forEach((d) => compartmentColor(d));
+];
+
+let initialShowCompartments: boolean;
+try {
+  initialShowCompartments = JSON.parse(localStorage.getItem("showCompartments") || "true");
+} catch {
+  initialShowCompartments = true;
+}
+const showCompartments = ref<boolean>(initialShowCompartments);
+watchEffect(() => {
+  localStorage.setItem("showCompartments", JSON.stringify(showCompartments.value));
+});
+
+const compartments = ref<{name: string, color:string}[]>(compartmentList.map((name) => ({name, color: compartmentColor(name)})));
 
 type ReactomeItem = {
   stId: string;
@@ -313,18 +326,21 @@ const updateGridify = async () => {
   const delaunay = Delaunay.from(compoundPoints);
   const voronoi = delaunay.voronoi([-1e5, -1e5, diagram.value!.clientWidth + 1e5, diagram.value!.clientHeight + 1e5]);
   voronoiGroup.selectAll('path').remove();
-  voronoiGroup.selectAll('path').data(compounds).enter()
-    .append('path')
-    .attr('d', (_d, i) => voronoi.renderCell(i))
-    .attr('stroke', 'black')
-    .attr('fill', (d) => compartmentColor(d.compartment || ''))
-    .attr('opacity', 0.25)
-    .attr('stroke-width', 0);
+  if (showCompartments.value) {
+    voronoiGroup.selectAll('path').data(compounds).enter()
+      .append('path')
+      .attr('d', (_d, i) => voronoi.renderCell(i))
+      .attr('stroke', 'black')
+      .attr('fill', (d) => compartmentColor(d.compartment || ''))
+      .attr('opacity', 0.25)
+      .attr('stroke-width', 0);
+  }
 };
 
 watchEffect(() => {
   fontSize.value;
   rounded.value;
+  showCompartments.value;
   interest.value.map((d) => d.stId);
   if (layout) {
     updateGridify();
@@ -612,6 +628,11 @@ const toggleNodeLabel = () => {
         <button class="btn btn-sm btn-ghost ml-2 gap-2 normal-case" @click="toggleNodeLabel"><span class="material-symbols-outlined">label</span>{{!currentNode || !getShowLabel(currentNode) ? "Show" : "Hide"}} Label</button>
         <button class="btn btn-sm btn-ghost ml-2" @click="showNodePopup = false"><span class="material-symbols-outlined">close</span></button>
       </div>
+      <div :class="{'bg-white': true, 'border': true, 'border-black': true, 'p-2': true, 'rounded-lg': true, fixed: true, hidden: !showCompartments}" :style="{bottom: '10px', right: '10px'}">
+        <div v-for="compartment in compartments" :style="`color: ${compartment.color}`">
+          {{ compartment.name }}
+        </div>
+      </div>
     </div>
     <div class="drawer-side">
       <label for="app-drawer" class="drawer-overlay"></label>
@@ -677,6 +698,14 @@ const toggleNodeLabel = () => {
           <input type="range" min="2" max="20" class="range" v-model.number="fontSize" />
           <h5 class="font-semibold mt-2">Rounded ({{ rounded }})</h5>
           <input type="range" min="0" max="1" step="0.01" class="range" v-model.number="rounded" />
+          <h5 class="font-semibold mt-2">
+            <div class="form-control">
+              <label class="cursor-pointer label">
+                <span>Show Compartments</span>
+                <input type="checkbox" class="toggle ml-2" v-model="showCompartments" />
+              </label>
+            </div>
+          </h5>
 
           <button class="btn block mb-2" @click="download">Download PNG</button>
           <button class="btn block" @click="downloadSVG">Download SVG</button>
