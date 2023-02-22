@@ -9,13 +9,15 @@ const diagram = ref<HTMLDivElement | null>(null);
 const canvas = ref<HTMLCanvasElement | null>(null);
 
 const color = (d: NamedNode) => {
-  return {
-    event: "white",
-    compound: "rgb(0, 104, 199)",
-  }[d.type] || "#000";
+  if (d.type === 'compound') {
+    // return compoundColor.value === 'compartment' ? compartmentColor(d.compartment || '') : 'rgb(0, 104, 199)';
+    return compoundColor.value === 'compartment' ? compartmentColor(d.compartment || '') : 'white';
+  }
+  return reactionColor.value === 'pathway' ? pathwayColor(d.pathway?.stId || '') : 'white';
 };
 
 const compartmentColor = d3.scaleOrdinal(d3.schemeCategory10);
+const pathwayColor = d3.scaleOrdinal(d3.schemePastel2);
 
 // Pre-bake compartment colors so they are stable
 const compartmentList = [
@@ -26,15 +28,40 @@ const compartmentList = [
   'extracellular region',
 ];
 
-let initialShowCompartments: boolean;
+type BackgroundOptions = 'none' | 'compartment' | 'pathway';
+let initialBackgroundDisplay: BackgroundOptions;
 try {
-  initialShowCompartments = JSON.parse(localStorage.getItem("showCompartments") || "true");
+  initialBackgroundDisplay = localStorage.getItem("backgroundDisplay") as BackgroundOptions || 'none';
 } catch {
-  initialShowCompartments = true;
+  initialBackgroundDisplay = 'none';
 }
-const showCompartments = ref<boolean>(initialShowCompartments);
+const backgroundDisplay = ref<BackgroundOptions>(initialBackgroundDisplay);
 watchEffect(() => {
-  localStorage.setItem("showCompartments", JSON.stringify(showCompartments.value));
+  localStorage.setItem("backgroundDisplay", backgroundDisplay.value);
+});
+
+type CompoundColorOptions = 'none' | 'compartment';
+let initialCompoundColor: CompoundColorOptions;
+try {
+  initialCompoundColor = localStorage.getItem("compoundColor") as CompoundColorOptions || 'none';
+} catch {
+  initialCompoundColor = 'none';
+}
+const compoundColor = ref<CompoundColorOptions>(initialCompoundColor);
+watchEffect(() => {
+  localStorage.setItem("compoundColor", compoundColor.value);
+});
+
+type ReactionColorOptions = 'none' | 'pathway';
+let initialReactionColor: ReactionColorOptions;
+try {
+  initialReactionColor = localStorage.getItem("reactionColor") as ReactionColorOptions || 'none';
+} catch {
+  initialReactionColor = 'none';
+}
+const reactionColor = ref<ReactionColorOptions>(initialReactionColor);
+watchEffect(() => {
+  localStorage.setItem("reactionColor", reactionColor.value);
 });
 
 const compartments = ref<{name: string, color:string}[]>(compartmentList.map((name) => ({name, color: compartmentColor(name)})));
@@ -129,14 +156,14 @@ const pathwayObjects = computed(async () => {
       pathway.name = pathway.name;
     }
     const pathwayResponse = await fetch(`https://reactome.org/ContentService/data/pathway/${pathway.stId}/containedEvents`);
-    return await pathwayResponse.json();
+    return {pathway, events: await pathwayResponse.json()};
   }));
 });
 
 const eventObjects = computed(async () => {
-  const eventLists = await Promise.all((await pathwayObjects.value).map(async (pathway) => {
+  const eventLists = await Promise.all((await pathwayObjects.value).map(async ({pathway, events}) => {
     const fullResults: any[] = [];
-    const eventIds = pathway.map((d: any) => d.stId);
+    const eventIds = events.map((d: any) => d.stId);
     // Get 20 reactions at a time (the reactome limit)
     const chunkSize = 20;
     for (let i = 0; i < eventIds.length; i += chunkSize) {
@@ -145,7 +172,7 @@ const eventObjects = computed(async () => {
         method: 'POST',
         body: chunk.join(','),
       });
-      fullResults.push(...(await eventsResponse.json()));
+      fullResults.push(...(await eventsResponse.json()).map((event: any) => ({...event, pathway})));
     }
     return fullResults;
   }));
@@ -158,6 +185,7 @@ interface NamedNode extends Node {
   stId: string;
   displayName: string;
   compartment?: string;
+  pathway?: NamedNode;
 };
 
 const cachedPositions: {[id: string]: {x: number, y: number}} = {};
@@ -183,7 +211,15 @@ const graph = computed<Promise<{nodes: NamedNode[], links: Link<NamedNode>[]}>>(
       if (getHiddenNode(event)?.state === "hide") {
         return;
       }
-      nodes.push({ name: event.name, displayName: event.displayName, stId: event.stId, type: "event", ...initialPosition, ...(cachedPositions[event.stId] || {}) });
+      nodes.push({
+        name: event.name,
+        displayName: event.displayName,
+        stId: event.stId,
+        type: "event",
+        pathway: event.pathway,
+        ...initialPosition,
+        ...(cachedPositions[event.stId] || {}),
+      });
       nodeMap[event.displayName] = nodes[nodes.length - 1];
     }
     const eventNode = nodeMap[event.displayName];
@@ -315,24 +351,40 @@ const updateGridify = async () => {
 
   const compoundPoints: [number, number][] = [];
   const compounds: NamedNode[] = [];
+  const reactionPoints: [number, number][] = [];
+  const reactions: NamedNode[] = [];
   nodes.forEach((node) => {
     cachedPositions[node.stId] = {x: node.x, y: node.y};
     if (node.type === 'compound') {
       compoundPoints.push([node.x, node.y]);
       compounds.push(node);
+    } else {
+      reactionPoints.push([node.x, node.y]);
+      reactions.push(node);
     }
   });
 
-  const delaunay = Delaunay.from(compoundPoints);
-  const voronoi = delaunay.voronoi([-1e5, -1e5, diagram.value!.clientWidth + 1e5, diagram.value!.clientHeight + 1e5]);
   voronoiGroup.selectAll('path').remove();
-  if (showCompartments.value) {
+
+  if (backgroundDisplay.value === 'compartment') {
+    const delaunay = Delaunay.from(compoundPoints);
+    const voronoi = delaunay.voronoi([-1e5, -1e5, diagram.value!.clientWidth + 1e5, diagram.value!.clientHeight + 1e5]);
     voronoiGroup.selectAll('path').data(compounds).enter()
       .append('path')
       .attr('d', (_d, i) => voronoi.renderCell(i))
       .attr('stroke', 'black')
       .attr('fill', (d) => compartmentColor(d.compartment || ''))
-      .attr('opacity', 0.25)
+      .attr('opacity', 0.5)
+      .attr('stroke-width', 0);
+  } else if (backgroundDisplay.value === 'pathway') {
+    const delaunay = Delaunay.from(reactionPoints);
+    const voronoi = delaunay.voronoi([-1e5, -1e5, diagram.value!.clientWidth + 1e5, diagram.value!.clientHeight + 1e5]);
+    voronoiGroup.selectAll('path').data(reactions).enter()
+      .append('path')
+      .attr('d', (_d, i) => voronoi.renderCell(i))
+      .attr('stroke', 'black')
+      .attr('fill', (d) => pathwayColor(d.pathway?.stId || ''))
+      .attr('opacity', 0.5)
       .attr('stroke-width', 0);
   }
 };
@@ -340,7 +392,9 @@ const updateGridify = async () => {
 watchEffect(() => {
   fontSize.value;
   rounded.value;
-  showCompartments.value;
+  backgroundDisplay.value;
+  compoundColor.value;
+  reactionColor.value;
   interest.value.map((d) => d.stId);
   if (layout) {
     updateGridify();
@@ -502,6 +556,20 @@ const addPathway = () => {
   pathwayIdInput.value = '';
 };
 
+const searchPathways = async () => {
+  const solrQuery = pathwayIdInput.value.split('\n').filter((name) => name.trim().length > 0).map((name) => `"${name}"`).join(' || ');
+  const result = await fetch(`https://reactome.org/ContentService/search/query?query=name%3A${encodeURIComponent(`"${pathwayIdInput.value}"`)}&species=Homo%20sapiens&types=Pathway&cluster=false&parserType=STD&Start%20row=0&rows=10&Force%20filters=true`);
+  const value = await result.json();
+  const removeHighlight = (text: string) => text.replaceAll('<span class="highlighting" >', '').replaceAll('</span>', '');
+  pathways.value.push(...value.results[0].entries.map((d: any) => ({
+    ...d,
+    displayName: `${removeHighlight(d.name)}`,
+    type: 'pathway',
+    state: 'hide',
+  })));
+  pathwayIdInput.value = '';
+};
+
 const addInterest = async () => {
   const solrQuery = interestInput.value.split('\n').filter((name) => name.trim().length > 0).map((name) => `"${name}"`).join(' || ');
   const result = await fetch(`https://reactome.org/ContentService/search/query?query=${encodeURIComponent(solrQuery)}&types=Chemical%20Compound&cluster=false&parserType=STD&Start%20row=0&rows=100&Force%20filters=true`);
@@ -628,9 +696,16 @@ const toggleNodeLabel = () => {
         <button class="btn btn-sm btn-ghost ml-2 gap-2 normal-case" @click="toggleNodeLabel"><span class="material-symbols-outlined">label</span>{{!currentNode || !getShowLabel(currentNode) ? "Show" : "Hide"}} Label</button>
         <button class="btn btn-sm btn-ghost ml-2" @click="showNodePopup = false"><span class="material-symbols-outlined">close</span></button>
       </div>
-      <div :class="{'bg-white': true, 'border': true, 'border-black': true, 'p-2': true, 'rounded-lg': true, fixed: true, hidden: !showCompartments}" :style="{bottom: '10px', right: '10px'}">
+      <div v-if="backgroundDisplay === 'compartment' || compoundColor === 'compartment'" class="bg-white border border-black p-2 rounded-lg fixed" :style="{bottom: '10px', right: '10px'}">
+        <h5 class="">Compartment</h5>
         <div v-for="compartment in compartments" :style="`color: ${compartment.color}`">
           {{ compartment.name }}
+        </div>
+      </div>
+      <div v-if="backgroundDisplay === 'pathway' || reactionColor === 'pathway'" class="bg-black border border-black p-2 rounded-lg fixed" :style="{top: '10px', right: '10px'}">
+        <h5 class="text-base-100">Pathway</h5>
+        <div v-for="pathway in pathways.filter((p) => p.state !== 'hide')" :style="`color: ${pathwayColor(pathway.stId)}`">
+          {{ pathway.displayName }}
         </div>
       </div>
     </div>
@@ -654,7 +729,10 @@ const toggleNodeLabel = () => {
             Once you have opened the file in Excel, copy the values under the ChEBI column and paste them below.
           </div>
           <textarea class="textarea textarea-bordered w-full mt-3" rows="5" v-model="interestInput"></textarea>
-          <div class="mb-2"><button class="btn btn-sm ml-1" @click="addInterest()">Add</button><button class="btn btn-sm ml-1" @click="interest = []">Remove All</button></div>
+          <div class="mb-2">
+            <button class="btn btn-sm ml-1" @click="addInterest()">Add</button>
+            <button class="btn btn-sm ml-1" @click="interest = []">Remove All</button>
+          </div>
           <div v-for="item, index in interest" :key="item.stId" class="flex mb-1">
             <button class="btn btn-sm btn-circle btn-ghost" @click="interest.splice(index, 1)"><span class="material-symbols-outlined">close</span></button>
             <button class="btn btn-sm btn-ghost normal-case">{{ item.displayName }}</button>
@@ -663,9 +741,16 @@ const toggleNodeLabel = () => {
           <div class="text-sm">
             Select a pathway from
             <a href="https://reactome.org/PathwayBrowser" target="_blank" class="link">Reactome</a>
-            and enter the ID found in the Reactome bottom panel.
-            Click a list item to toggle its visibility.
+            and enter the ID found in the Reactome bottom panel and click Add.
+            You may also enter a keyword and click Search.
+            Click a pathway to toggle its visibility.
             Adding pathways and changing pathway visibility re-runs the layout and loses manual node adjustments.
+          </div>
+          <input class="input input-sm input-bordered" placeholder="ID e.g. R-HSA-70171" v-model="pathwayIdInput"/>
+          <div class="my-2">
+            <button class="btn btn-sm ml-1" @click="addPathway()">Add</button>
+            <button class="btn btn-sm ml-1" @click="searchPathways()">Search</button>
+            <button class="btn btn-sm ml-1" @click="pathways = []">Remove All</button>
           </div>
           <div v-for="item, index in pathways" :key="item.stId" class="flex mb-1">
             <button class="btn btn-sm btn-circle btn-ghost" @click="pathways.splice(index, 1)"><span class="material-symbols-outlined">close</span></button>
@@ -674,7 +759,6 @@ const toggleNodeLabel = () => {
               {{ item.displayName }}
             </button>
           </div>
-          <input class="input input-sm input-bordered" placeholder="ID e.g. R-HSA-70171" v-model="pathwayIdInput"/><button class="btn btn-sm ml-1" @click="addPathway()">Add</button>
           <div class="font-semibold mt-2">Hide / Split</div>
           <div class="text-sm">
             Click a node in the network to bring up visibility options which adds it to this list.
@@ -701,8 +785,34 @@ const toggleNodeLabel = () => {
           <h5 class="font-semibold mt-2">
             <div class="form-control">
               <label class="cursor-pointer label">
-                <span>Show Compartments</span>
-                <input type="checkbox" class="toggle ml-2" v-model="showCompartments" />
+                <span>Background</span>
+                <select class="select select-sm" v-model="backgroundDisplay">
+                  <option>none</option>
+                  <option>compartment</option>
+                  <option>pathway</option>
+                </select>
+              </label>
+            </div>
+          </h5>
+          <h5 class="font-semibold mt-2">
+            <div class="form-control">
+              <label class="cursor-pointer label">
+                <span>Compound Color</span>
+                <select class="select select-sm" v-model="compoundColor">
+                  <option>none</option>
+                  <option>compartment</option>
+                </select>
+              </label>
+            </div>
+          </h5>
+          <h5 class="font-semibold mt-2">
+            <div class="form-control">
+              <label class="cursor-pointer label">
+                <span>Reaction Color</span>
+                <select class="select select-sm" v-model="reactionColor">
+                  <option>none</option>
+                  <option>pathway</option>
+                </select>
               </label>
             </div>
           </h5>
