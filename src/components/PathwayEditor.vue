@@ -34,7 +34,18 @@ type ReactomeItem = {
   state: "hide" | "split" | "show";
 };
 
-const interest = ref(localStorage.getItem("interest") || "");
+const interestInput = ref("");
+
+let initialInterest: ReactomeItem[];
+try {
+  initialInterest = JSON.parse(localStorage.getItem("interest") || "[]");
+} catch {
+  initialInterest = [];
+}
+const interest = ref<ReactomeItem[]>(initialInterest);
+const getInterestNode = (id: string) => {
+  return interest.value.find((d) => d.stId === id);
+};
 
 let initialPathways: ReactomeItem[];
 try {
@@ -76,7 +87,7 @@ const getShowLabel = (d: NamedNode) => {
 }
 
 watchEffect(() => {
-  localStorage.setItem("interest", interest.value);
+  localStorage.setItem("interest", JSON.stringify(interest.value));
 });
 watchEffect(() => {
   localStorage.setItem("pathways", JSON.stringify(pathways.value));
@@ -97,10 +108,6 @@ watchEffect(() => {
   localStorage.setItem("padding", `${padding.value}`);
 });
 
-const interestList = computed(() => {
-  return interest.value.split(/[\n,]/).map(d => d.trim());
-});
-
 const pathwayObjects = computed(async () => {
   return await Promise.all(pathways.value.filter((pathway) => pathway.state === "show").map(async (pathway) => {
     if (pathway.displayName === pathway.stId) {
@@ -111,16 +118,23 @@ const pathwayObjects = computed(async () => {
     const pathwayResponse = await fetch(`https://reactome.org/ContentService/data/pathway/${pathway.stId}/containedEvents`);
     return await pathwayResponse.json();
   }));
-})
+});
 
 const eventObjects = computed(async () => {
   const eventLists = await Promise.all((await pathwayObjects.value).map(async (pathway) => {
+    const fullResults: any[] = [];
     const eventIds = pathway.map((d: any) => d.stId);
-    const eventsResponse = await fetch('https://reactome.org/ContentService/data/query/ids', {
-      method: 'POST',
-      body: eventIds.join(','),
-    });
-    return eventsResponse.json();
+    // Get 20 reactions at a time (the reactome limit)
+    const chunkSize = 20;
+    for (let i = 0; i < eventIds.length; i += chunkSize) {
+      const chunk = eventIds.slice(i, i + chunkSize);
+      const eventsResponse = await fetch('https://reactome.org/ContentService/data/query/ids', {
+        method: 'POST',
+        body: chunk.join(','),
+      });
+      fullResults.push(...(await eventsResponse.json()));
+    }
+    return fullResults;
   }));
   return eventLists.flat();
 });
@@ -273,6 +287,8 @@ const updateGridify = async () => {
     .attr("height", (d: any) => d.bounds.height())
     .attr("rx", nodeSize.value * rounded.value / 2)
     .attr("ry", nodeSize.value * rounded.value / 2)
+    .style("stroke-width", (d: any) => getInterestNode(d.stId) ? 4 : 1)
+    .style("stroke", (d: any) => getInterestNode(d.stId) ? "red" : "black")
     .style("fill", (d: any) => color(d));
 
   mainGroup.selectAll(".label")
@@ -309,6 +325,7 @@ const updateGridify = async () => {
 watchEffect(() => {
   fontSize.value;
   rounded.value;
+  interest.value.map((d) => d.stId);
   if (layout) {
     updateGridify();
   }
@@ -317,7 +334,6 @@ watchEffect(() => {
 watchEffect(async () => {
   const {nodes, links} = await graph.value;
   diagram.value?.replaceChildren();
-  // const svg = d3.select(diagram.value).append('svg').attr('width', width).attr('height', height);
   const svg = d3.select(diagram.value).append('svg').attr('class', 'w-full h-full');
   mainGroup = svg.append("g").attr("transform", transform as any);
   voronoiGroup = mainGroup.append("g");
@@ -333,7 +349,7 @@ watchEffect(async () => {
     // .linkDistance(nodeSize.value * 1.5)
     // .symmetricDiffLinkLengths(5)
     // .start(1000, 0, 100, 100, false);
-    .start(100, 0, 10, 10, false);
+    .start(100, 0, 100, 100, false);
 
   linksGroup = mainGroup.append("g");
 
@@ -470,6 +486,15 @@ const addPathway = () => {
   pathwayIdInput.value = '';
 };
 
+const addInterest = async () => {
+  const solrQuery = interestInput.value.split('\n').filter((name) => name.trim().length > 0).map((name) => `"${name}"`).join(' || ');
+  const result = await fetch(`https://reactome.org/ContentService/search/query?query=${encodeURIComponent(solrQuery)}&types=Chemical%20Compound&cluster=false&parserType=STD&Start%20row=0&rows=100&Force%20filters=true`);
+  const value = await result.json();
+  const removeHighlight = (text: string) => text.replaceAll('<span class="highlighting" >', '').replaceAll('</span>', '');
+  interest.value.push(...value.results[0].entries.map((d: any) => ({...d, displayName: `${removeHighlight(d.name)} [${removeHighlight(d.compartmentNames.join(''))}]`})));
+  interestInput.value = '';
+};
+
 const triggerDownload = (imgURI: string) => {
   var evt = new MouseEvent('click', {
     view: window,
@@ -483,7 +508,7 @@ const triggerDownload = (imgURI: string) => {
   a.setAttribute('target', '_blank');
 
   a.dispatchEvent(evt);
-}
+};
 
 const downloadSVG = () => {
   const svg = d3.select(diagram.value).select("svg").node() as any;
@@ -580,7 +605,7 @@ const toggleNodeLabel = () => {
         </svg>
       </label>
       <div ref="diagram" class="w-full h-full"></div>
-      <div :class="{'bg-gray-200': true, 'p-2': true, 'rounded-lg': true, fixed: true, hidden: !showNodePopup}" :style="{left: `${popupX}px`, top: `${popupY}px`}">
+      <div :class="{'bg-gray-200': true, 'border': true, 'border-black': true, 'p-2': true, 'rounded-lg': true, fixed: true, hidden: !showNodePopup}" :style="{left: `${popupX}px`, top: `${popupY}px`}">
         <div class="mx-2 mb-1 font-semibold">{{ currentNode?.displayName }}</div>
         <button class="btn btn-sm btn-ghost gap-2 normal-case" @click="hideNode"><span class="material-symbols-outlined">visibility_off</span>Hide</button>
         <button v-if="currentNode && currentNode.type === 'compound'" class="btn btn-sm btn-ghost ml-2 gap-2 normal-case" @click="splitNode"><span class="material-symbols-outlined">{{ currentNode && getHiddenNode(currentNode)?.state === 'split' ? 'call_merge' : 'call_split' }}</span>{{ currentNode && getHiddenNode(currentNode)?.state === 'split' ? "Merge" : "Split" }}</button>
@@ -590,42 +615,66 @@ const toggleNodeLabel = () => {
     </div>
     <div class="drawer-side">
       <label for="app-drawer" class="drawer-overlay"></label>
-      <aside class="max-w-xs">
+      <aside class="max-w-xs overflow-x-hidden">
         <div class="flex-1 bg-base-100 p-2">
           <span class="text-4xl">
-            <span style="color:#0068c7; font-family:'Crushed'" class="font-semibold">Padi</span>
+            <span style="color:#0068c7; font-family:Crushed" class="font-semibold">Padi</span>
           </span>
           <div style="color:#0068c7" class="text-sm font-bold">Your pathway diagram editor</div>
         </div>
         <div class="flex-1 bg-base-200 p-2">
-          <h5 class="font-semibold mt-2">Metabolites of interest</h5>
-          <div class="text-sm">Not yet implemented.</div>
-          <textarea class="textarea textarea-bordered" rows="2" v-model="interest"></textarea>
+          <h5 class="font-semibold mt-2">Metabolites of Interest</h5>
+          <div class="text-sm">
+            To highlight metabolites of interest, enter one metabolite identifier per line (ChEBI, KEGG, HMDB) and click Add.
+            Common names may also work, but may produce many spurious results.
+            To convert to one of these identifiers, you may use a tool such as
+            <a href="https://www.metaboanalyst.ca/MetaboAnalyst/upload/ConvertView.xhtml" target="_blank" class="link">MetaboAnalyst's ID Conversion</a>.
+            Tip: In that tool, right click on the resulting download link and select Save Link As to download.
+            Once you have opened the file in Excel, copy the values under the ChEBI column and paste them below.
+          </div>
+          <textarea class="textarea textarea-bordered w-full mt-3" rows="5" v-model="interestInput"></textarea>
+          <div class="mb-2"><button class="btn btn-sm ml-1" @click="addInterest()">Add</button><button class="btn btn-sm ml-1" @click="interest = []">Remove All</button></div>
+          <div v-for="item, index in interest" :key="item.stId" class="flex mb-1">
+            <button class="btn btn-sm btn-circle btn-ghost" @click="interest.splice(index, 1)"><span class="material-symbols-outlined">close</span></button>
+            <button class="btn btn-sm btn-ghost normal-case">{{ item.displayName }}</button>
+          </div>
           <h5 class="font-semibold mt-2">Pathways</h5>
-          <div class="text-sm">Select pathway from <a href="https://reactome.org/PathwayBrowser" target="_blank" class="link">reactome</a> and enter the ID found in the reactome bottom panel. Click a list item to toggle visibility.</div>
+          <div class="text-sm">
+            Select a pathway from
+            <a href="https://reactome.org/PathwayBrowser" target="_blank" class="link">Reactome</a>
+            and enter the ID found in the Reactome bottom panel.
+            Click a list item to toggle its visibility.
+            Adding pathways and changing pathway visibility re-runs the layout and loses manual node adjustments.
+          </div>
           <div v-for="item, index in pathways" :key="item.stId" class="flex mb-1">
             <button class="btn btn-sm btn-circle btn-ghost" @click="pathways.splice(index, 1)"><span class="material-symbols-outlined">close</span></button>
             <button class="btn btn-sm btn-ghost gap-2 normal-case" @click="updateState(item)" :title="item.displayName">
               <span class="material-symbols-outlined">{{ {hide: "visibility_off", show: "visibility", split: "call_split"}[item.state] }}</span>
-              {{ `${item.displayName.substring(0, 15)}${item.displayName.length > 15 ? '...' : ''}` }}
+              {{ item.displayName }}
             </button>
           </div>
           <input class="input input-sm input-bordered" placeholder="ID e.g. R-HSA-70171" v-model="pathwayIdInput"/><button class="btn btn-sm ml-1" @click="addPathway()">Add</button>
           <div class="font-semibold mt-2">Hide / Split</div>
-          <div class="text-sm">Click a reaction node in the diagram to toggle label visibility. Click any node in the diagram to add it to this list. Click a list item to toggle between show/hide/duplicate.</div>
+          <div class="text-sm">
+            Click a node in the network to bring up visibility options which adds it to this list.
+            Click a list item to toggle between show, hide, and duplicate.
+            Changing node visibility re-runs the layout and loses manual node adjustments.
+          </div>
           <div v-for="item, index in hidden" :key="item.stId" class="flex mb-1">
             <button class="btn btn-sm btn-circle btn-ghost" @click="hidden.splice(index, 1)"><span class="material-symbols-outlined">close</span></button>
             <button class="btn btn-sm btn-ghost gap-2 normal-case" @click="updateState(item)" :title="item.displayName">
               <span class="material-symbols-outlined">{{ {hide: "visibility_off", show: "visibility", split: "call_split"}[item.state] }}</span>
-              {{ `${item.displayName.substring(0, 15)}${item.displayName.length > 15 ? '...' : ''}` }}
+              {{ item.displayName }}
             </button>
           </div>
+          <h5 class="font-semibold mt-2">Node Size ({{ nodeSize }})</h5>
+          <div class="text-sm">Changing this re-runs the layout.</div>
+          <input type="range" min="10" max="100" class="range" v-model.number="nodeSize" />
+          <h5 class="font-semibold mt-2">Spacing ({{ padding }})</h5>
+          <div class="text-sm">Changing this re-runs the layout.</div>
+          <input type="range" min="10" max="100" class="range" v-model.number="padding" />
           <h5 class="font-semibold mt-2">Font Size ({{ fontSize }})</h5>
           <input type="range" min="2" max="20" class="range" v-model.number="fontSize" />
-          <h5 class="font-semibold mt-2">Node Size ({{ nodeSize }})</h5>
-          <input type="range" min="10" max="100" class="range" v-model.number="nodeSize" />
-          <h5 class="font-semibold mt-2">Padding ({{ padding }})</h5>
-          <input type="range" min="10" max="100" class="range" v-model.number="padding" />
           <h5 class="font-semibold mt-2">Rounded ({{ rounded }})</h5>
           <input type="range" min="0" max="1" step="0.01" class="range" v-model.number="rounded" />
 
