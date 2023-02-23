@@ -697,16 +697,34 @@ const toggleNodeLabel = () => {
         <button class="btn btn-sm btn-ghost ml-2 gap-2 normal-case" @click="toggleNodeLabel"><span class="material-symbols-outlined">label</span>{{!currentNode || !getShowLabel(currentNode) ? "Show" : "Hide"}} Label</button>
         <button class="btn btn-sm btn-ghost ml-2" @click="showNodePopup = false"><span class="material-symbols-outlined">close</span></button>
       </div>
-      <div v-if="backgroundDisplay === 'compartment' || compoundColor === 'compartment'" class="bg-white border border-black p-2 rounded-lg fixed" :style="{bottom: '10px', right: '10px'}">
-        <h3 class="">Compartment</h3>
-        <div v-for="compartment in compartments" :style="`color: ${compartment.color}`">
-          {{ compartment.name }}
+      <div v-if="backgroundDisplay !== 'none' || reactionColor !== 'none' || compoundColor !== 'none'" class="bg-base-200 p-4 rounded-lg fixed" :style="{bottom: '10px', right: '10px'}">
+        <div v-if="backgroundDisplay === 'compartment'">
+          <h3 class="text-xl font-black">Background (Compartment)</h3>
+          <div v-for="compartment in compartments">
+            <span :style="`background: ${compartment.color}`">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
+            {{ compartment.name }}
+          </div>
         </div>
-      </div>
-      <div v-if="backgroundDisplay === 'pathway' || reactionColor === 'pathway'" class="bg-black border border-black p-2 rounded-lg fixed" :style="{top: '10px', right: '10px'}">
-        <h3 class="text-base-100">Pathway</h3>
-        <div v-for="pathway in pathways.filter((p) => p.state !== 'hide')" :style="`color: ${pathwayColor(pathway.stId)}`">
-          {{ pathway.displayName }}
+        <div v-if="backgroundDisplay === 'pathway'">
+          <h3 class="text-xl font-black">Background (pathway)</h3>
+          <div v-for="pathway in pathways.filter((p) => p.state !== 'hide')">
+            <span :style="`background: ${pathwayColor(pathway.stId)}`">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
+            {{ pathway.displayName }}
+          </div>
+        </div>
+        <div v-if="compoundColor === 'compartment'">
+          <h3 class="text-xl font-black">Node (metabolite compartment)</h3>
+          <div v-for="compartment in compartments">
+            <span :style="`background: ${compartment.color}`">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
+            {{ compartment.name }}
+          </div>
+        </div>
+        <div v-if="reactionColor === 'pathway'">
+          <h3  class="text-xl font-black">Node (reaction pathway)</h3>
+          <div v-for="pathway in pathways.filter((p) => p.state !== 'hide')">
+            <span :style="`background: ${pathwayColor(pathway.stId)}`">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
+            {{ pathway.displayName }}
+          </div>
         </div>
       </div>
     </div>
@@ -725,7 +743,8 @@ const toggleNodeLabel = () => {
         <div class="flex-1 bg-base-200 p-2">
           <h3 class="text-xl font-black mt-2">Metabolites of Interest</h3>
           <div class="text-base">
-            To highlight metabolites of interest, enter one metabolite identifier per line (ChEBI, KEGG, HMDB) and click Add.
+            To highlight metabolites of interest, enter one metabolite identifier per line
+            (ChEBI, KEGG, HMDB) and click Add.
             Common names may also work, but may produce many spurious results.
             To convert to one of these identifiers, you may use a tool such as
             <a href="https://www.metaboanalyst.ca/MetaboAnalyst/upload/ConvertView.xhtml" target="_blank" class="link">MetaboAnalyst's ID Conversion</a>.
