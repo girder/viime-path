@@ -10,8 +10,7 @@ const canvas = ref<HTMLCanvasElement | null>(null);
 
 const color = (d: NamedNode) => {
   if (d.type === 'compound') {
-    // return compoundColor.value === 'compartment' ? compartmentColor(d.compartment || '') : 'rgb(0, 104, 199)';
-    return compoundColor.value === 'compartment' ? compartmentColor(d.compartment || '') : 'white';
+    return compoundColor.value === 'compartment' ? compartmentColor(d.compartment || '') : 'rgb(150, 150, 150)';
   }
   return reactionColor.value === 'pathway' ? pathwayColor(d.pathway?.stId || '') : 'white';
 };
