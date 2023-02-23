@@ -418,7 +418,7 @@ watchEffect(async () => {
     // .linkDistance(nodeSize.value * 1.5)
     // .symmetricDiffLinkLengths(5)
     // .start(1000, 0, 100, 100, false);
-    .start(100, 0, 100, 100, false);
+    .start(100, 0, 10, 10, false);
 
   linksGroup = mainGroup.append("g");
 
