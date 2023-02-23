@@ -4,6 +4,7 @@ import * as d3 from 'd3';
 import { Node, Link, Layout } from '../WebCola/src/layout';
 import { GridRouter } from '../WebCola/src/gridrouter';
 import { Delaunay } from 'd3-delaunay';
+import viimeLogo from "../assets/viime_logo_ko.svg";
 
 const diagram = ref<HTMLDivElement | null>(null);
 const canvas = ref<HTMLCanvasElement | null>(null);
@@ -110,6 +111,7 @@ const nodeSize = ref(+(localStorage.getItem("nodeSize") || 70));
 const padding = ref(+(localStorage.getItem("padding") || 35));
 const rounded = ref(+(localStorage.getItem("rounded") || 0));
 const pathwayIdInput = ref("");
+const pathwaySearchInput = ref("");
 const showNodePopup = ref(false);
 const popupX = ref(200);
 const popupY = ref(200);
@@ -557,7 +559,7 @@ const addPathway = () => {
 
 const searchPathways = async () => {
   const solrQuery = pathwayIdInput.value.split('\n').filter((name) => name.trim().length > 0).map((name) => `"${name}"`).join(' || ');
-  const result = await fetch(`https://reactome.org/ContentService/search/query?query=name%3A${encodeURIComponent(`"${pathwayIdInput.value}"`)}&species=Homo%20sapiens&types=Pathway&cluster=false&parserType=STD&Start%20row=0&rows=10&Force%20filters=true`);
+  const result = await fetch(`https://reactome.org/ContentService/search/query?query=name%3A${encodeURIComponent(`"${pathwaySearchInput.value}"`)}&species=Homo%20sapiens&types=Pathway&cluster=false&parserType=STD&Start%20row=0&rows=10&Force%20filters=true`);
   const value = await result.json();
   const removeHighlight = (text: string) => text.replaceAll('<span class="highlighting" >', '').replaceAll('</span>', '');
   pathways.value.push(...value.results[0].entries.map((d: any) => ({
@@ -566,7 +568,7 @@ const searchPathways = async () => {
     type: 'pathway',
     state: 'hide',
   })));
-  pathwayIdInput.value = '';
+  pathwaySearchInput.value = '';
 };
 
 const addInterest = async () => {
@@ -689,20 +691,20 @@ const toggleNodeLabel = () => {
       </label>
       <div ref="diagram" class="w-full h-full"></div>
       <div :class="{'bg-gray-200': true, 'border': true, 'border-black': true, 'p-2': true, 'rounded-lg': true, fixed: true, hidden: !showNodePopup}" :style="{left: `${popupX}px`, top: `${popupY}px`}">
-        <div class="mx-2 mb-1 font-semibold">{{ currentNode?.displayName }}</div>
+        <div class="mx-2 mb-1 text-xl font-black">{{ currentNode?.displayName }}</div>
         <button class="btn btn-sm btn-ghost gap-2 normal-case" @click="hideNode"><span class="material-symbols-outlined">visibility_off</span>Hide</button>
         <button v-if="currentNode && currentNode.type === 'compound'" class="btn btn-sm btn-ghost ml-2 gap-2 normal-case" @click="splitNode"><span class="material-symbols-outlined">{{ currentNode && getHiddenNode(currentNode)?.state === 'split' ? 'call_merge' : 'call_split' }}</span>{{ currentNode && getHiddenNode(currentNode)?.state === 'split' ? "Merge" : "Split" }}</button>
         <button class="btn btn-sm btn-ghost ml-2 gap-2 normal-case" @click="toggleNodeLabel"><span class="material-symbols-outlined">label</span>{{!currentNode || !getShowLabel(currentNode) ? "Show" : "Hide"}} Label</button>
         <button class="btn btn-sm btn-ghost ml-2" @click="showNodePopup = false"><span class="material-symbols-outlined">close</span></button>
       </div>
       <div v-if="backgroundDisplay === 'compartment' || compoundColor === 'compartment'" class="bg-white border border-black p-2 rounded-lg fixed" :style="{bottom: '10px', right: '10px'}">
-        <h5 class="">Compartment</h5>
+        <h3 class="">Compartment</h3>
         <div v-for="compartment in compartments" :style="`color: ${compartment.color}`">
           {{ compartment.name }}
         </div>
       </div>
       <div v-if="backgroundDisplay === 'pathway' || reactionColor === 'pathway'" class="bg-black border border-black p-2 rounded-lg fixed" :style="{top: '10px', right: '10px'}">
-        <h5 class="text-base-100">Pathway</h5>
+        <h3 class="text-base-100">Pathway</h3>
         <div v-for="pathway in pathways.filter((p) => p.state !== 'hide')" :style="`color: ${pathwayColor(pathway.stId)}`">
           {{ pathway.displayName }}
         </div>
@@ -711,15 +713,18 @@ const toggleNodeLabel = () => {
     <div class="drawer-side">
       <label for="app-drawer" class="drawer-overlay"></label>
       <aside class="max-w-xs overflow-x-hidden">
-        <div class="flex-1 bg-base-100 p-2">
-          <span class="text-4xl">
-            <span style="color:#0068c7; font-family:Crushed" class="font-semibold">Padi</span>
-          </span>
-          <div style="color:#0068c7" class="text-sm font-bold">Your pathway diagram editor</div>
+        <div class="flex-1 bg-neutral text-neutral-content p-2">
+          <div class="flex items-end">
+            <img :src="viimeLogo" alt="VIIME" class="h-11">
+            <span class="text-5xl font-black ml-2">
+              path
+            </span>
+          </div>
+          <div class="text-base text-xl font-black mt-2">Pathway diagram editor</div>
         </div>
         <div class="flex-1 bg-base-200 p-2">
-          <h5 class="font-semibold mt-2">Metabolites of Interest</h5>
-          <div class="text-sm">
+          <h3 class="text-xl font-black mt-2">Metabolites of Interest</h3>
+          <div class="text-base">
             To highlight metabolites of interest, enter one metabolite identifier per line (ChEBI, KEGG, HMDB) and click Add.
             Common names may also work, but may produce many spurious results.
             To convert to one of these identifiers, you may use a tool such as
@@ -736,8 +741,8 @@ const toggleNodeLabel = () => {
             <button class="btn btn-sm btn-circle btn-ghost" @click="interest.splice(index, 1)"><span class="material-symbols-outlined">close</span></button>
             <button class="btn btn-sm btn-ghost normal-case">{{ item.displayName }}</button>
           </div>
-          <h5 class="font-semibold mt-2">Pathways</h5>
-          <div class="text-sm">
+          <h3 class="text-xl font-black mt-2">Pathways</h3>
+          <div class="text-base">
             Select a pathway from
             <a href="https://reactome.org/PathwayBrowser" target="_blank" class="link">Reactome</a>
             and enter the ID found in the Reactome bottom panel and click Add.
@@ -745,11 +750,16 @@ const toggleNodeLabel = () => {
             Click a pathway to toggle its visibility.
             Adding pathways and changing pathway visibility re-runs the layout and loses manual node adjustments.
           </div>
-          <input class="input input-sm input-bordered" placeholder="ID e.g. R-HSA-70171" v-model="pathwayIdInput"/>
           <div class="my-2">
+            <input class="input input-sm input-bordered" placeholder="ID e.g. R-HSA-70171" v-model="pathwayIdInput"/>
             <button class="btn btn-sm ml-1" @click="addPathway()">Add</button>
+          </div>
+          <div class="my-2">
+            <input class="input input-sm input-bordered" placeholder="Keyword e.g. glycolysis" v-model="pathwaySearchInput"/>
             <button class="btn btn-sm ml-1" @click="searchPathways()">Search</button>
-            <button class="btn btn-sm ml-1" @click="pathways = []">Remove All</button>
+          </div>
+          <div>
+            <button class="btn btn-sm" @click="pathways = []">Remove All</button>
           </div>
           <div v-for="item, index in pathways" :key="item.stId" class="flex mb-1">
             <button class="btn btn-sm btn-circle btn-ghost" @click="pathways.splice(index, 1)"><span class="material-symbols-outlined">close</span></button>
@@ -758,8 +768,8 @@ const toggleNodeLabel = () => {
               {{ item.displayName }}
             </button>
           </div>
-          <div class="font-semibold mt-2">Hide / Split</div>
-          <div class="text-sm">
+          <div class="text-xl font-black mt-2">Hide / Split</div>
+          <div class="text-base">
             Click a node in the network to bring up visibility options which adds it to this list.
             Click a list item to toggle between show, hide, and duplicate.
             Changing node visibility re-runs the layout and loses manual node adjustments.
@@ -771,17 +781,17 @@ const toggleNodeLabel = () => {
               {{ item.displayName }}
             </button>
           </div>
-          <h5 class="font-semibold mt-2">Node Size ({{ nodeSize }})</h5>
-          <div class="text-sm">Changing this re-runs the layout.</div>
+          <h3 class="text-xl font-black mt-2">Node Size ({{ nodeSize }})</h3>
+          <div class="text-base">Changing this re-runs the layout.</div>
           <input type="range" min="10" max="100" class="range" v-model.number="nodeSize" />
-          <h5 class="font-semibold mt-2">Spacing ({{ padding }})</h5>
-          <div class="text-sm">Changing this re-runs the layout.</div>
+          <h3 class="text-xl font-black mt-2">Spacing ({{ padding }})</h3>
+          <div class="text-base">Changing this re-runs the layout.</div>
           <input type="range" min="10" max="100" class="range" v-model.number="padding" />
-          <h5 class="font-semibold mt-2">Font Size ({{ fontSize }})</h5>
+          <h3 class="text-xl font-black mt-2">Font Size ({{ fontSize }})</h3>
           <input type="range" min="2" max="20" class="range" v-model.number="fontSize" />
-          <h5 class="font-semibold mt-2">Rounded ({{ rounded }})</h5>
+          <h3 class="text-xl font-black mt-2">Rounded ({{ rounded }})</h3>
           <input type="range" min="0" max="1" step="0.01" class="range" v-model.number="rounded" />
-          <h5 class="font-semibold mt-2">
+          <h3 class="text-xl font-black mt-2">
             <div class="form-control">
               <label class="cursor-pointer label">
                 <span>Background</span>
@@ -792,19 +802,19 @@ const toggleNodeLabel = () => {
                 </select>
               </label>
             </div>
-          </h5>
-          <h5 class="font-semibold mt-2">
+          </h3>
+          <h3 class="text-xl font-black mt-2">
             <div class="form-control">
               <label class="cursor-pointer label">
-                <span>Compound Color</span>
+                <span>Metabolite Color</span>
                 <select class="select select-sm" v-model="compoundColor">
                   <option>none</option>
                   <option>compartment</option>
                 </select>
               </label>
             </div>
-          </h5>
-          <h5 class="font-semibold mt-2">
+          </h3>
+          <h3 class="text-xl font-black mt-2">
             <div class="form-control">
               <label class="cursor-pointer label">
                 <span>Reaction Color</span>
@@ -814,7 +824,7 @@ const toggleNodeLabel = () => {
                 </select>
               </label>
             </div>
-          </h5>
+          </h3>
 
           <button class="btn block mb-2" @click="download">Download PNG</button>
           <button class="btn block" @click="downloadSVG">Download SVG</button>
