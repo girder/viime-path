@@ -28,6 +28,17 @@ const compartmentList = [
   'extracellular region',
 ];
 
+let initialShowLegend: boolean;
+try {
+  initialShowLegend = JSON.parse(localStorage.getItem("showLegend") || 'true');
+} catch {
+  initialShowLegend = true;
+}
+const showLegend = ref<boolean>(initialShowLegend);
+watchEffect(() => {
+  localStorage.setItem("showLegend", JSON.stringify(showLegend.value));
+});
+
 type BackgroundOptions = 'none' | 'compartment' | 'pathway';
 let initialBackgroundDisplay: BackgroundOptions;
 try {
@@ -697,7 +708,7 @@ const toggleNodeLabel = () => {
         <button class="btn btn-sm btn-ghost ml-2 gap-2 normal-case" @click="toggleNodeLabel"><span class="material-symbols-outlined">label</span>{{!currentNode || !getShowLabel(currentNode) ? "Show" : "Hide"}} Label</button>
         <button class="btn btn-sm btn-ghost ml-2" @click="showNodePopup = false"><span class="material-symbols-outlined">close</span></button>
       </div>
-      <div v-if="backgroundDisplay !== 'none' || reactionColor !== 'none' || compoundColor !== 'none'" class="bg-base-200 p-4 rounded-lg fixed" :style="{bottom: '10px', right: '10px'}">
+      <div v-if="showLegend && (backgroundDisplay !== 'none' || reactionColor !== 'none' || compoundColor !== 'none')" class="bg-base-200 p-4 rounded-lg fixed" :style="{bottom: '10px', right: '10px'}">
         <div v-if="backgroundDisplay === 'compartment'">
           <h3 class="text-xl font-black">Background (Compartment)</h3>
           <div v-for="compartment in compartments">
@@ -841,6 +852,14 @@ const toggleNodeLabel = () => {
                   <option>none</option>
                   <option>pathway</option>
                 </select>
+              </label>
+            </div>
+          </h3>
+          <h3 class="text-xl font-black mt-2">
+            <div class="form-control">
+              <label class="cursor-pointer label flex justify-between">
+                <span>Legend</span>
+                <input type="checkbox" class="toggle" v-model="showLegend">
               </label>
             </div>
           </h3>
