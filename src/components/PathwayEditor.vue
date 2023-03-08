@@ -129,6 +129,7 @@ const popupY = ref(200);
 let currentNode: NamedNode | null = null;
 
 const showLabel = ref<{[id: string]: boolean}>({});
+const hightlightLink = ref<{[source: string]: {[target: string]: boolean}}>({});
 
 // By default compounds show label, events hide label
 const getShowLabel = (d: NamedNode) => {
@@ -315,30 +316,52 @@ const updateGridify = async () => {
   const routes = gridrouter.routeEdges<any>(layout.links(), nudge, (e) => e.source.index, e=> e.target.index);
 
   linksGroup.selectAll('path').remove();
-  routes.forEach(route => {
+  routes.forEach((route, edgeIndex) => {
+    const source =(layout.links()[edgeIndex].source as NamedNode).stId;
+    const target =(layout.links()[edgeIndex].target as NamedNode).stId;
     var cornerradius = 5;
     var arrowwidth = 3;
     var arrowheight = 7;
     var p = GridRouter.getRoutePath(route, cornerradius, arrowwidth, arrowheight);
-    if (arrowheight > 0) {
-      linksGroup.append('path')
-        .attr('class', 'linkarrowoutline')
-        .attr('d', p.arrowpath);
-        linksGroup.append('path')
-        .attr('class', 'linkarrow')
-        .attr('d', p.arrowpath);
-    }
-    linksGroup.append('path')
+    const updateHightlight = () => {
+      if (!hightlightLink.value[source]) {
+        hightlightLink.value[source] = {};
+      }
+      hightlightLink.value[source][target] = !hightlightLink.value[source][target];
+      outline.style('stroke-width', hightlightLink.value[source]?.[target] ? 5 : 2);
+      line.style('stroke-width', hightlightLink.value[source]?.[target] ? 4 : 1);
+      arrowOutline.style('stroke-width', hightlightLink.value[source]?.[target] ? 5 : 2);
+      arrowLine.style('stroke-width', hightlightLink.value[source]?.[target] ? 4 : 1);
+    };
+    const arrowOutline = linksGroup.append('path')
+      .attr('class', 'linkarrowoutline')
+      .style('stroke', 'transparent')
+      .style('cursor', 'pointer')
+      .style('stroke-width', hightlightLink.value[source]?.[target] ? 6 : 3)
+      .attr('d', p.arrowpath + ' Z')
+      .on('click', updateHightlight);
+    const outline = linksGroup.append('path')
       .attr('class', 'linkoutline')
       .attr('d', p.routepath)
-      .style('stroke', 'white')
-      .style('stroke-width', 2)
-      .attr('fill', 'none');
-    linksGroup.append('path')
+      .style('stroke', 'transparent')
+      .style('cursor', 'pointer')
+      .style('stroke-width', hightlightLink.value[source]?.[target] ? 6 : 3)
+      .attr('fill', 'none')
+      .on('click', updateHightlight);
+    const arrowLine = linksGroup.append('path')
+      .attr('class', 'linkarrow')
+      .style('stroke', 'black')
+      .style('cursor', 'pointer')
+      .style('stroke-width', hightlightLink.value[source]?.[target] ? 4 : 1)
+      .attr('d', p.arrowpath + ' Z')
+      .on('click', updateHightlight);
+    const line = linksGroup.append('path')
       .attr('class', 'link')
       .attr('d', p.routepath)
+      .style('cursor', 'pointer')
       .style('stroke', 'black')
       .attr('fill', 'none')
+      .on('click', updateHightlight);
   });
 
   mainGroup.selectAll(".node")
@@ -818,7 +841,7 @@ const toggleNodeLabel = () => {
           <div class="text-base">Changing this re-runs the layout.</div>
           <input type="range" min="10" max="100" class="range" v-model.number="padding" />
           <h3 class="text-xl font-black mt-2">Font Size ({{ fontSize }})</h3>
-          <input type="range" min="2" max="20" class="range" v-model.number="fontSize" />
+          <input type="range" min="2" max="40" class="range" v-model.number="fontSize" />
           <h3 class="text-xl font-black mt-2">Rounded ({{ rounded }})</h3>
           <input type="range" min="0" max="1" step="0.01" class="range" v-model.number="rounded" />
           <h3 class="text-xl font-black mt-2">
