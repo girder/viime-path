@@ -130,6 +130,7 @@ let currentNode: NamedNode | null = null;
 
 const showLabel = ref<{[id: string]: boolean}>({});
 const hightlightLink = ref<{[source: string]: {[target: string]: boolean}}>({});
+const pinned = ref<{[id: string]: {x: number, y: number}}>({});
 
 // By default compounds show label, events hide label
 const getShowLabel = (d: NamedNode) => {
@@ -294,10 +295,34 @@ let voronoiGroup: d3.Selection<SVGGElement, unknown, null, undefined>;
 let linksGroup: d3.Selection<SVGGElement, unknown, null, undefined>;
 let layout: Layout;
 
-const updateGridify = async () => {
-  layout.start(0, 0, 0, 0, false, false);
-
+const loadPinned = async () => {
   const {nodes} = await graph.value;
+  // Load pinned locations
+  nodes.forEach(node => {
+    if (pinned.value[node.stId]) {
+      const px = pinned.value[node.stId].x;
+      const py = pinned.value[node.stId].y;
+      node.x = px;
+      node.y = py;
+      // @ts-ignore
+      node.bounds.x = px;
+      // @ts-ignore
+      node.bounds.y = py;
+    }
+  });
+};
+
+const fullLayout = () => {
+  layout.start(100, 0, 10, 10, false);
+  loadPinned();
+};
+
+const updateGridify = async () => {
+  const {nodes} = await graph.value;
+
+  layout.start(0, 0, 0, 0, false, false);
+  loadPinned();
+
   const margin = 5;
   const size = nodeSize.value - 2 * margin;
   nodes.forEach((node: any) => {
@@ -450,11 +475,12 @@ watchEffect(async () => {
     .nodes(nodes)
     .links(links)
     // .groupCompactness(1e-4)
-    .linkDistance(nodeSize.value + padding.value)
+    .linkDistance(nodeSize.value + padding.value);
     // .linkDistance(nodeSize.value * 1.5)
     // .symmetricDiffLinkLengths(5)
     // .start(1000, 0, 100, 100, false);
-    .start(100, 0, 10, 10, false);
+
+  fullLayout();
 
   linksGroup = mainGroup.append("g");
 
@@ -523,6 +549,7 @@ watchEffect(async () => {
       d.bounds.x = p.x;
       // @ts-ignore
       d.bounds.y = p.y;
+      pinned.value[d.stId] = {x: d.x, y: d.y};
       updateGridify();
     }
   };
@@ -711,6 +738,15 @@ const toggleNodeLabel = () => {
   showLabel.value[currentNode.stId] = !getShowLabel(currentNode);
 };
 
+const unpinNode = () => {
+  showNodePopup.value = false;
+  if (!currentNode) {
+    return;
+  }
+  delete pinned.value[currentNode.stId];
+  fullLayout();
+  updateGridify();
+};
 
 </script>
 
@@ -729,6 +765,7 @@ const toggleNodeLabel = () => {
         <button class="btn btn-sm btn-ghost gap-2 normal-case" @click="hideNode"><span class="material-symbols-outlined">visibility_off</span>Hide</button>
         <button v-if="currentNode && currentNode.type === 'compound'" class="btn btn-sm btn-ghost ml-2 gap-2 normal-case" @click="splitNode"><span class="material-symbols-outlined">{{ currentNode && getHiddenNode(currentNode)?.state === 'split' ? 'call_merge' : 'call_split' }}</span>{{ currentNode && getHiddenNode(currentNode)?.state === 'split' ? "Merge" : "Split" }}</button>
         <button class="btn btn-sm btn-ghost ml-2 gap-2 normal-case" @click="toggleNodeLabel"><span class="material-symbols-outlined">label</span>{{!currentNode || !getShowLabel(currentNode) ? "Show" : "Hide"}} Label</button>
+        <button v-if="pinned[currentNode?.stId || '']" class="btn btn-sm btn-ghost ml-2 gap-2 normal-case" @click="unpinNode"><span class="material-symbols-outlined">location_off</span>Unpin</button>
         <button class="btn btn-sm btn-ghost ml-2" @click="showNodePopup = false"><span class="material-symbols-outlined">close</span></button>
       </div>
       <div v-if="showLegend && (backgroundDisplay !== 'none' || reactionColor !== 'none' || compoundColor !== 'none')" class="bg-base-200 p-4 rounded-lg fixed" :style="{bottom: '10px', right: '10px'}">
@@ -772,7 +809,7 @@ const toggleNodeLabel = () => {
               path
             </span>
           </div>
-          <div class="text-base text-xl font-black mt-2">Pathway diagram editor</div>
+          <div class="text-xl font-black mt-2">Pathway diagram editor</div>
         </div>
         <div class="flex-1 bg-base-200 p-2">
           <h3 class="text-xl font-black mt-2">Metabolites of Interest</h3>
